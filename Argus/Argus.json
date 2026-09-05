@@ -1,0 +1,9 @@
+{
+  "Name": "Argus",
+  "Author": "ofnature",
+  "Punchline": "Submarine and airship tracker with EXP planning and one-click route entry.",
+  "Description": "Tracks every Free Company submarine and airship this client has seen, shows out/returned counts on the server info bar, calculates voyage EXP and rank-ups, suggests routes around the vessel's rank, range, fuel and unlocked sectors (with must-include sectors and progression unlocks), and fills the in-game voyage planner with one click. Loot history, supply warnings and a part optimizer. Companion to Daedalus.",
+  "RepoUrl": "https://github.com/ofnature/Argus",
+  "Tags": ["submarine", "airship", "voyage", "workshop", "tracker", "planner", "utility"],
+  "DalamudApiLevel": 15
+}

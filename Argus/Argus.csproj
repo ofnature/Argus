@@ -1,0 +1,41 @@
+<Project Sdk="Dalamud.NET.Sdk/15.0.0">
+
+  <PropertyGroup>
+    <AssemblyName>Argus</AssemblyName>
+    <RootNamespace>Argus</RootNamespace>
+    <Version>0.1.0</Version>
+    <DalamudLibPath>$(AppData)\XIVLauncher\addon\Hooks\dev\</DalamudLibPath>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ECommons\ECommons\ECommons.csproj">
+      <Private>true</Private>
+    </ProjectReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\images\icon.png" Link="images\icon.png" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- Allow the test assembly to access internal types -->
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>Argus.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <!--
+    Dev-plugin reload race (same fix as Charon): Dalamud reloads the moment the DLL changes and
+    then reads Argus.json next to it, but DalamudPackager writes the manifest seconds after the
+    compiler writes the DLL. Touching the DLL after packaging makes it the last file to change,
+    so the reload always finds a complete manifest. Must hook the packager targets, not "Build".
+  -->
+  <Target Name="TouchAssemblyAfterPackaging"
+          AfterTargets="DefaultDalamudPackagerDebug;DefaultDalamudPackagerRelease">
+    <Touch Files="$(TargetPath)" />
+  </Target>
+
+</Project>

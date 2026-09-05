@@ -1,0 +1,24 @@
+bin/
+obj/
+.vs/
+.idea/
+*.user
+*.suo
+*.log
+TestResults/
+packages.lock.json
+
+# Reference clones (SubmarineTracker etc.) — not part of this repo
+external/
+
+# Internal docs stay local; README.md and docs/ are the only tracked markdown
+CLAUDE.md
+PLAN.md
+HANDOFF.md
+ROADMAP.md
+docs/internal/
+
+# AI coding assistants
+.claude/
+.cursor/
+.mcp.json
