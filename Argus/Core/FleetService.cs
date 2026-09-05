@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
+using Argus.Core.Calc;
 using Argus.Core.Game;
 using Argus.Core.Model;
 using Argus.Core.Store;
@@ -90,6 +91,31 @@ internal sealed class FleetService
         {
             RefreshUnlocks(record);
             FleetChanged?.Invoke(fcId);
+        }
+
+        RefreshSupplies(record, nowUtc);
+    }
+
+    private static readonly TimeSpan SuppliesInterval = TimeSpan.FromSeconds(3);
+    private DateTime lastSupplies = DateTime.MinValue;
+
+    private void RefreshSupplies(FreeCompanyRecord record, DateTime nowUtc)
+    {
+        if (nowUtc - lastSupplies < SuppliesInterval)
+            return;
+        lastSupplies = nowUtc;
+
+        var tanks = WorkshopReader.CountInventory(Supplies.CeruleumTankItem);
+        var kits = WorkshopReader.CountInventory(Supplies.MagitekRepairMaterialsItem);
+        if (tanks < 0 || kits < 0)
+            return;
+
+        if (record.CeruleumTanks != tanks || record.MagitekRepairMaterials != kits)
+        {
+            record.CeruleumTanks = tanks;
+            record.MagitekRepairMaterials = kits;
+            record.SuppliesSeenUtc = nowUtc;
+            Store.MarkDirty();
         }
     }
 

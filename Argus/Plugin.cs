@@ -2,6 +2,7 @@ using System;
 using Argus.Core;
 using Argus.Core.Game;
 using Argus.Core.Model;
+using Argus.Core.Store;
 using Argus.Windows;
 using Dalamud.Game.Command;
 using Dalamud.Interface.Windowing;
@@ -27,11 +28,13 @@ public sealed class Plugin : IDalamudPlugin
     internal FleetService Fleet { get; }
     internal PlannerService Planner { get; }
     internal PlannerInterop PlannerInterop { get; }
+    internal LootStore Loot { get; }
     internal MainWindow MainWindow { get; }
 
     private readonly WindowSystem windowSystem = new("Argus");
     private readonly PlannerOverlay plannerOverlay;
     private readonly DtrStatus dtr;
+    private readonly LootHook lootHook;
 
     public Plugin(IDalamudPluginInterface pluginInterface)
     {
@@ -47,6 +50,9 @@ public sealed class Plugin : IDalamudPlugin
 
         Planner = new PlannerService(this);
         PlannerInterop = new PlannerInterop();
+        Loot = new LootStore(Service.PluginInterface.GetPluginConfigDirectory());
+        lootHook = new LootHook(this, Loot);
+        lootHook.Recorded += OnLootRecorded;
 
         MainWindow = new MainWindow(this);
         plannerOverlay = new PlannerOverlay(this);
@@ -101,6 +107,8 @@ public sealed class Plugin : IDalamudPlugin
             MainWindow.Toggle();
     }
 
+    private void OnLootRecorded(System.Collections.Generic.IReadOnlyList<Argus.Core.Model.LootEntry> _) => Loot.SaveIfDirty();
+
     private void OpenMain() => MainWindow.IsOpen = true;
 
     private void OpenConfig() => MainWindow.ShowPage(MainWindow.Page.Settings);
@@ -116,6 +124,9 @@ public sealed class Plugin : IDalamudPlugin
         Service.CommandManager.RemoveHandler(CommandName);
         Service.CommandManager.RemoveHandler(CommandAlias);
 
+        lootHook.Recorded -= OnLootRecorded;
+        lootHook.Dispose();
+        Loot.SaveIfDirty();
         Fleet.Store.SaveIfDirty();
         dtr.Dispose();
         windowSystem.RemoveAllWindows();

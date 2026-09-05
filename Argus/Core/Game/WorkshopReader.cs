@@ -115,6 +115,13 @@ internal static unsafe class WorkshopReader
         return result;
     }
 
+    /// <summary>Items of one kind in the player's bags (what dispatch and repair actually consume); -1 when unavailable.</summary>
+    public static int CountInventory(uint itemId)
+    {
+        var manager = InventoryManager.Instance();
+        return manager == null ? -1 : manager->GetInventoryItemCount(itemId, false, false);
+    }
+
     /// <summary>Submarine sector unlock/explored flags for the current FC (HousingManager static getters).</summary>
     public static void ReadSubmarineUnlocks(IEnumerable<uint> sectorRowIds, HashSet<uint> unlocked, HashSet<uint> explored)
     {

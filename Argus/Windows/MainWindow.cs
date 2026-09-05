@@ -13,7 +13,7 @@ namespace Argus.Windows;
 
 public sealed class MainWindow : Window, IDisposable
 {
-    public enum Page { Overview, Vessels, Planner, Builder, Loot, Settings }
+    public enum Page { Overview, Vessels, Planner, Builder, Loot, Settings, Debug }
 
     private readonly Plugin plugin;
     private Page page = Page.Overview;
@@ -61,6 +61,9 @@ public sealed class MainWindow : Window, IDisposable
                 case Page.Builder: BuilderSection.Draw(plugin); break;
                 case Page.Loot: LootSection.Draw(plugin); break;
                 case Page.Settings: SettingsSection.Draw(plugin); break;
+#if DEBUG
+                case Page.Debug: DebugSection.Draw(plugin); break;
+#endif
             }
         }
     }
@@ -80,6 +83,9 @@ public sealed class MainWindow : Window, IDisposable
         if (SidebarTab.Draw("Builder", FontAwesomeIcon.Tools, page == Page.Builder)) page = Page.Builder;
         if (SidebarTab.Draw("Loot", FontAwesomeIcon.Gem, page == Page.Loot)) page = Page.Loot;
         if (SidebarTab.Draw("Settings", FontAwesomeIcon.Cog, page == Page.Settings)) page = Page.Settings;
+#if DEBUG
+        if (SidebarTab.Draw("Debug", FontAwesomeIcon.Bug, page == Page.Debug)) page = Page.Debug;
+#endif
     }
 
     internal static void PageHeader(string title, string subtitle)

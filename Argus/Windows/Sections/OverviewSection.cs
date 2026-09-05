@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using Argus.Core;
+using Argus.Core.Calc;
 using Argus.Core.Model;
 using Argus.Windows.Components;
 using Dalamud.Bindings.ImGui;
@@ -105,8 +107,38 @@ internal static class OverviewSection
                 DrawVesselRow(v, now, inner);
         }
 
+        DrawSupplies(plugin, fc);
         Card.EndFlat(origin, width, Styling.CardBgSoft);
         Styling.VSpace(4f);
+    }
+
+    private static void DrawSupplies(Plugin plugin, FreeCompanyRecord fc)
+    {
+        var planner = plugin.Planner;
+        var chosen = new Dictionary<(VesselType, int), uint[]>();
+        if (planner.Selected is { } sel && sel.FcId == fc.Id && planner.ChosenRoute is { } route)
+            chosen[(sel.Type, sel.Slot)] = route.Sectors;
+
+        var report = Supplies.Evaluate(plugin.Data, fc, chosen);
+        Styling.VSpace(2f);
+        Styling.SectionLabel("Supplies");
+        if (!report.Known)
+        {
+            Styling.Text("Not counted yet: stand in the workshop with the tanks and repair materials in your bags.", Styling.TextMuted);
+            return;
+        }
+
+        var tanks = report.TanksForNextDispatch > 0
+            ? $"{report.Tanks} ceruleum tanks · next dispatch needs {report.TanksForNextDispatch} ({report.DispatchesCovered} dispatch{(report.DispatchesCovered == 1 ? "" : "es")} covered)"
+            : $"{report.Tanks} ceruleum tanks";
+        Styling.Text(tanks, report.TanksShort ? Styling.AccentRose : Styling.TextSecondary);
+
+        var kits = report.KitsForFullRepair > 0
+            ? $"{report.Kits} magitek repair materials · a full repair of every vessel needs {report.KitsForFullRepair} ({report.RepairsCovered} covered)"
+            : $"{report.Kits} magitek repair materials";
+        Styling.Text(kits, report.KitsShort ? Styling.AccentRose : Styling.TextSecondary);
+        if (fc.SuppliesSeenUtc != default)
+            Styling.Text($"counted {Formatting.Duration(DateTime.UtcNow - fc.SuppliesSeenUtc)} ago", Styling.TextMuted);
     }
 
     private static void DrawVesselRow(Vessel v, DateTime now, float width)
