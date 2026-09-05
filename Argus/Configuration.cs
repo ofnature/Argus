@@ -1,18 +1,10 @@
 using System;
 using System.Collections.Generic;
+using Argus.Core.Calc;
 using Argus.Core.Model;
 using Dalamud.Configuration;
 
 namespace Argus;
-
-public enum RouteGoal
-{
-    /// <summary>Best EXP per hour of voyage time. The leveling default.</summary>
-    ExpPerHour,
-
-    /// <summary>Most EXP from a single dispatch regardless of duration.</summary>
-    ExpPerVoyage,
-}
 
 /// <summary>Planner preferences, kept separately per vessel type because subs and airships level at different paces.</summary>
 [Serializable]

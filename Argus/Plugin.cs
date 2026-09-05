@@ -1,5 +1,7 @@
 using System;
 using Argus.Core;
+using Argus.Core.Game;
+using Argus.Core.Model;
 using Argus.Windows;
 using Dalamud.Game.Command;
 using Dalamud.Interface.Windowing;
@@ -21,10 +23,14 @@ public sealed class Plugin : IDalamudPlugin
     internal static Plugin Instance { get; private set; } = null!;
 
     internal Configuration Config { get; }
+    internal GameData Data { get; }
     internal FleetService Fleet { get; }
+    internal PlannerService Planner { get; }
+    internal PlannerInterop PlannerInterop { get; }
     internal MainWindow MainWindow { get; }
 
     private readonly WindowSystem windowSystem = new("Argus");
+    private readonly PlannerOverlay plannerOverlay;
     private readonly DtrStatus dtr;
 
     public Plugin(IDalamudPluginInterface pluginInterface)
@@ -34,12 +40,18 @@ public sealed class Plugin : IDalamudPlugin
         ECommonsMain.Init(pluginInterface, this);
 
         Sheets.Initialize();
+        Data = GameDataLoader.Load();
 
         Config = Service.PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
         Fleet = new FleetService(Config, Service.PluginInterface.GetPluginConfigDirectory());
 
+        Planner = new PlannerService(this);
+        PlannerInterop = new PlannerInterop();
+
         MainWindow = new MainWindow(this);
+        plannerOverlay = new PlannerOverlay(this);
         windowSystem.AddWindow(MainWindow);
+        windowSystem.AddWindow(plannerOverlay);
 
         dtr = new DtrStatus(Fleet, Config, () => MainWindow.IsOpen = true);
 
@@ -64,6 +76,7 @@ public sealed class Plugin : IDalamudPlugin
     {
         var now = DateTime.UtcNow;
         Fleet.Update(now);
+        PlannerInterop.Update(now);
         dtr.Update(now);
     }
 
@@ -107,6 +120,8 @@ public sealed class Plugin : IDalamudPlugin
         dtr.Dispose();
         windowSystem.RemoveAllWindows();
         MainWindow.Dispose();
+        plannerOverlay.Dispose();
+        Planner.Dispose();
 
         ECommonsMain.Dispose();
     }

@@ -2,24 +2,6 @@ namespace Argus.Windows.Sections;
 
 // Pages that land in later phases. Kept as real sections so navigation is complete from the first build.
 
-internal static class VesselsSection
-{
-    public static void Draw(Plugin plugin)
-    {
-        MainWindow.PageHeader("Vessels", "Builds, stats and EXP progress per vessel.");
-        Styling.Text("Coming in the next phase.", Styling.TextMuted);
-    }
-}
-
-internal static class PlannerSection
-{
-    public static void Draw(Plugin plugin)
-    {
-        MainWindow.PageHeader("Planner", "Suggested routes around the vessel's rank, range, fuel and unlocks.");
-        Styling.Text("Coming in the next phase.", Styling.TextMuted);
-    }
-}
-
 internal static class BuilderSection
 {
     public static void Draw(Plugin plugin)
