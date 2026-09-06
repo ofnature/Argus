@@ -8,6 +8,9 @@
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- The SDK forces Platform=x64, which would put solution builds in bind\Debug while a project build lands in
+         bin\Debug. Pin one location so the dev-plugin path never points at a stale DLL. -->
+    <OutputPath>bin\$(Configuration)\</OutputPath>
   </PropertyGroup>
 
   <ItemGroup>
