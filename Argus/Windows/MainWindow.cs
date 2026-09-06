@@ -93,7 +93,7 @@ public sealed class MainWindow : Window, IDisposable
         ImGui.SetWindowFontScale(1.45f);
         Styling.Text(title, Styling.TextStrong);
         ImGui.SetWindowFontScale(1f);
-        Styling.Text(subtitle, Styling.TextMuted);
+        Styling.TextWrapped(subtitle, Styling.TextMuted);
         ImGui.Spacing();
         ImGui.Separator();
         ImGui.Spacing();

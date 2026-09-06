@@ -40,7 +40,7 @@ internal static unsafe class DebugSection
         Styling.Text($"territory {p.Territory} · HousingManager {(p.HousingManager ? "ok" : "null")} · WorkshopTerritory {(p.WorkshopTerritory ? "ok" : "null")}{(p.IslandSanctuary ? " · island sanctuary (skipped)" : string.Empty)}",
             p.WorkshopTerritory ? Styling.TextSecondary : Styling.AccentRose);
         Styling.Text($"FC {p.FreeCompanyId:X} · {p.Submarines} subs (first return {p.FirstSubReturn}) · {p.Airships} airships (first return {p.FirstAirReturn}) · in workshop = {plugin.Fleet.InWorkshop}", Styling.TextSecondary);
-        Styling.Text("Walk in without touching the panel: if these numbers appear on their own, the game refreshes by itself; if they only appear after opening the Voyage Control Panel, the client populates them then.", Styling.TextMuted);
+        Styling.TextWrapped("Walk in without touching the panel: if these numbers appear on their own, the game refreshes by itself; if they only appear after opening the Voyage Control Panel, the client populates them then.", Styling.TextMuted);
         foreach (var line in plugin.Fleet.Log)
             Styling.Text(line, Styling.TextDim);
 

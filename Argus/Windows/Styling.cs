@@ -76,6 +76,14 @@ internal static class Styling
             ImGui.TextUnformatted(text);
     }
 
+    /// <summary>Text that wraps at the content edge, for sentences rather than labels.</summary>
+    public static void TextWrapped(string text, Vector4 color)
+    {
+        ImGui.PushTextWrapPos(0f);
+        Text(text, color);
+        ImGui.PopTextWrapPos();
+    }
+
     public static void TextScaled(string text, Vector4 color, float fontScale)
     {
         ImGui.SetWindowFontScale(fontScale);
