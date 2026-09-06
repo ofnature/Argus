@@ -373,3 +373,52 @@ public class ClientReadoutTests
         Assert.Equal(7 + a.SurveyDistance, VoyageMath.RouteDistance(start, new[] { a }));
     }
 }
+
+public class UnlockFocusTests
+{
+    private readonly GameData data = GameDataFixture.Load();
+
+    [Fact]
+    public void ShortestVoyageGoalPrefersTheShortRoute()
+    {
+        var bronco = GameDataFixture.Bronco(data, 10);
+        var req = new RouteRequest(VesselType.Airship, 1, bronco, new HashSet<uint> { 0, 1, 2, 3, 4 }, new HashSet<uint> { 1 },
+            RouteGoal.ShortestVoyage, null, false);
+        var top = RouteSearch.FindTop(data, req, 5);
+        Assert.NotEmpty(top);
+        Assert.Equal(new uint[] { 1 }, top[0].Sectors);
+        Assert.True(top.Zip(top.Skip(1)).All(pair => pair.First.Duration <= pair.Second.Duration));
+    }
+
+    [Fact]
+    public void UnlockBuildsRankSurveillanceTierFirst()
+    {
+        // Airship sector B (row 1): tier 2 at 46, tier 3 at 54, no favor line.
+        var top = PartOptimizer.BestForUnlock(data, VesselType.Airship, 50, 1, new uint[] { 1 }, 1, 10);
+        Assert.NotEmpty(top);
+        Assert.Equal(2, top[0].SurveillanceTier);
+        Assert.True(top[0].Build.Surveillance >= 54);
+        Assert.True(top[0].Distance <= top[0].Build.Range);
+        Assert.True(top.Zip(top.Skip(1)).All(pair => pair.First.SurveillanceTier >= pair.Second.SurveillanceTier));
+    }
+
+    [Fact]
+    public void UnlockBuildsHonourFavorLineAndRolls()
+    {
+        // Submarine sector A (row 1): T2 20, T3 80, favor 70. A Shark at rank 1 has favor 70 → double-dip rolls.
+        var top = PartOptimizer.BestForUnlock(data, VesselType.Submarine, 1, 1, new uint[] { 1 }, 1, 5);
+        Assert.NotEmpty(top);
+        Assert.True(top[0].FavorMet);
+        Assert.True(top[0].RollsPerDay > 24.0 / top[0].Duration.TotalHours * 1.5);
+    }
+
+    [Fact]
+    public void SurveillanceTierUsesThresholds()
+    {
+        var t = ExpModel.ThresholdsFor(VesselType.Submarine, 1); // T2 20, T3 80
+        Assert.Equal(0, PartOptimizer.SurveillanceTier(t, 10));
+        Assert.Equal(1, PartOptimizer.SurveillanceTier(t, 20));
+        Assert.Equal(2, PartOptimizer.SurveillanceTier(t, 80));
+        Assert.Equal(0, PartOptimizer.SurveillanceTier(default, 999));
+    }
+}

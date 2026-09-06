@@ -118,6 +118,12 @@ public sealed class PlannerOverlay : Window, IDisposable
             Pill.Draw("ESTIMATE", Styling.AccentViolet, 0.7f);
         }
 
+        if (planner.UnlockFocusActive)
+        {
+            ImGui.SameLine();
+            Pill.Draw("UNLOCK", Styling.AccentTeal, 0.7f);
+        }
+
         if (vessel == null)
         {
             Styling.Text("Vessel not recognised.", Styling.TextMuted);

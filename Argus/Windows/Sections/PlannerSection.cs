@@ -155,6 +155,9 @@ internal static class PlannerSection
 
         changed |= ToggleInline("Include locked", ref prefs.IgnoreUnlocks,
             "Plan with sectors the FC has not unlocked yet. For what-if planning; the in-game planner will refuse them.");
+        ImGui.SameLine(0, 14f * scale);
+        changed |= ToggleInline("Unlock focus", ref prefs.UnlockFocus,
+            "Plan for discovering the next sector instead of EXP. Discovery is a roll on every survey of the progression sector, so this picks the shortest voyage through it and the Builder ranks parts by surveillance tier there, favor above its line (double-dip = a second roll) and speed. Needs Progression on.");
 
         Styling.VSpace(4f);
         return changed;
@@ -206,6 +209,16 @@ internal static class PlannerSection
             Styling.Text($"visit {visit.Letter}. {visit.Name}", Styling.TextStrong);
             ImGui.SameLine();
             Styling.Text("→ " + GrantText(data, vessel.Type, step.Rewards), Styling.TextSecondary);
+            if (prefs.UnlockFocus)
+            {
+                ImGui.SameLine();
+                Pill.Draw("UNLOCK FOCUS", Styling.AccentTeal, 0.72f);
+                Styling.Text("Discovery is a roll each time this sector is surveyed, so routes are ranked shortest-first to roll as often as possible. The Builder page ranks part sets for it.", Styling.TextDim);
+            }
+            else
+            {
+                Styling.Text("Discovery is a roll each time this sector is surveyed; the roll is not guaranteed. Turn on Unlock focus to plan around it.", Styling.TextMuted);
+            }
         }
 
         Card.EndFlat(origin, width, Styling.CardBgSoft, Styling.AccentTeal);

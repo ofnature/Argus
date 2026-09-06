@@ -13,6 +13,9 @@ public enum RouteGoal
 
     /// <summary>Most EXP from a single dispatch regardless of duration.</summary>
     ExpPerVoyage,
+
+    /// <summary>Shortest voyage first: unlock focus, where every survey of the progression sector is another discovery roll.</summary>
+    ShortestVoyage,
 }
 
 /// <summary>Everything the optimizer needs to know about one vessel and what it is allowed to do.</summary>
@@ -209,7 +212,12 @@ public static class RouteSearch
                 var exp = new RouteExp((uint)g, (uint)a, (uint)m);
                 var duration = TimeSpan.FromSeconds(r.Seconds + VoyageMath.FixedVoyageSeconds);
                 var used = useAverage ? a : g;
-                var score = req.Goal == RouteGoal.ExpPerHour ? used / duration.TotalHours : used;
+                var score = req.Goal switch
+                {
+                    RouteGoal.ExpPerHour => used / duration.TotalHours,
+                    RouteGoal.ShortestVoyage => 1e9 / Math.Max(1.0, duration.TotalSeconds),
+                    _ => used,
+                };
                 return (Result: new RouteResult(r.Order.Select(i => t.Points[i].Id).ToArray(), r.Distance, duration, f, exp, score), Seconds: r.Seconds, Fuel: f);
             })
             .Where(x => x.Seconds + VoyageMath.FixedVoyageSeconds <= capSeconds)
@@ -288,7 +296,12 @@ public static class RouteSearch
         var duration = VoyageMath.RouteDuration(start, route, build.Speed);
         var exp = ExpModel.Route(build, route);
         var used = exp.For(useAverage);
-        var score = goal == RouteGoal.ExpPerHour && duration.TotalHours > 0 ? used / duration.TotalHours : used;
+        var score = goal switch
+        {
+            RouteGoal.ExpPerHour when duration.TotalHours > 0 => used / duration.TotalHours,
+            RouteGoal.ShortestVoyage => 1e9 / Math.Max(1.0, duration.TotalSeconds),
+            _ => used,
+        };
         return new RouteResult(sectors.ToArray(), distance, duration, VoyageMath.RouteFuel(route), exp, score);
     }
 }

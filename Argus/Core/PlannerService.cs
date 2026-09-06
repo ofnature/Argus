@@ -130,6 +130,10 @@ internal sealed class PlannerService : IDisposable
     public HashSet<uint> Explored(FreeCompanyRecord fc, VesselType type)
         => type == VesselType.Submarine ? new HashSet<uint>(fc.ExploredSubSectors) : new HashSet<uint>(fc.UnlockedAirshipSectors);
 
+    /// <summary>True while unlock focus is on and there is a sector left to discover from here.</summary>
+    public bool UnlockFocusActive
+        => Vessel is { } v && plugin.Config.PlannerFor(v.Type).UnlockFocus && AutoStep != null;
+
     /// <summary>All must-includes that will be sent to the search: manual ones plus the auto step.</summary>
     public HashSet<uint> EffectiveMustInclude()
     {
@@ -165,9 +169,10 @@ internal sealed class PlannerService : IDisposable
             : null;
 
         var fuel = fc.CeruleumTanks;
+        var goal = prefs.UnlockFocus && AutoStep != null ? RouteGoal.ShortestVoyage : prefs.Goal;
         return new RouteRequest(
             v.Type, Map, build, unlocked, EffectiveMustInclude(),
-            prefs.Goal,
+            goal,
             prefs.DurationCapHours > 0 ? TimeSpan.FromHours(prefs.DurationCapHours) : null,
             prefs.AverageBonus || v.Type == VesselType.Airship,
             fuel >= 0 ? fuel : -1,

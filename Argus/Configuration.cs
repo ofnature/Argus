@@ -23,6 +23,12 @@ public sealed class PlannerPrefs
 
     /// <summary>Use the average EXP bonus (surveillance/favor rolls) instead of the guaranteed one when ranking routes.</summary>
     public bool AverageBonus = false;
+
+    /// <summary>
+    /// Plan for discovering the next sector instead of EXP: shortest voyage through the progression sector (discovery
+    /// is a roll on every survey there) and builds ranked by surveillance tier, favor line and speed. Off by default.
+    /// </summary>
+    public bool UnlockFocus = false;
 }
 
 [Serializable]
