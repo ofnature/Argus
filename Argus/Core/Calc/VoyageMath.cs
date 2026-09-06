@@ -5,10 +5,11 @@ using Argus.Core.Model;
 namespace Argus.Core.Calc;
 
 /// <summary>
-/// Distances and durations. Submarine formulas are SubmarineTracker's (verified against the game). Airship formulas
-/// reproduce the community model (distance units from the sheet coordinates, travel 1150 min per unit at speed 1,
-/// survey minutes from the sheet scaled by 70/speed, 12h fixed) — in-game, <c>PlannerInterop</c> prefers the client's
-/// own <c>GetAirshipVoyageTimeAndDistance</c> and these serve as the offline estimate.
+/// Distances and durations. In-game the plugin installs the client's own voyage functions as
+/// <see cref="LegOverride"/> / <see cref="SurveyOverride"/>, which is authoritative; the formulas below are what
+/// tests and offline planning use. Submarine formulas are SubmarineTracker's. Airship formulas were fitted to the
+/// client's readout for all 24 start legs (2026-09-05): distance = floor(raw × 0.052) exactly, travel time within
+/// one minute (the client quantises to whole minutes in a way no single rounding rule reproduces).
 /// </summary>
 public static class VoyageMath
 {
@@ -17,13 +18,23 @@ public static class VoyageMath
 
     public const int MaxSectorsPerVoyage = 5;
 
+    public delegate (int Distance, int Seconds) LegFunc(SectorInfo from, SectorInfo to, int speed);
+
+    public delegate int SurveyFunc(SectorInfo sector, int speed);
+
+    /// <summary>Client-backed leg distance/time; null outside the game.</summary>
+    public static LegFunc? LegOverride { get; set; }
+
+    /// <summary>Client-backed survey duration; null outside the game.</summary>
+    public static SurveyFunc? SurveyOverride { get; set; }
+
     private const double SubmarineDistanceFactor = 0.035;
     private const double SubmarineTravelFactor = 3990.0;   // × raw distance / (speed × 100), minutes
     private const double SubmarineSurveyFactor = 7000.0;   // × SurveyMinutes / (speed × 100), minutes
 
-    private const double AirshipDistanceFactor = 0.05;
-    private const double AirshipTravelMinutesPerUnit = 1150.0; // ÷ speed
-    private const double AirshipSurveyReferenceSpeed = 70.0;   // sheet SurveyMinutes are quoted at speed 70
+    private const double AirshipDistanceFactor = 0.052;
+    private const double AirshipTravelFactor = 3583.0;      // × raw distance / speed, seconds
+    private const double AirshipSurveyReferenceSpeed = 70.0; // sheet SurveyMinutes are quoted at speed 70
 
     private static double Raw(SectorInfo a, SectorInfo b)
     {
@@ -35,26 +46,31 @@ public static class VoyageMath
 
     /// <summary>Distance units between two points as the planner shows them (no survey distance).</summary>
     public static int LegDistance(SectorInfo a, SectorInfo b)
-        => a.Type == VesselType.Airship
-            ? (int)Math.Round(Raw(a, b) * AirshipDistanceFactor, MidpointRounding.AwayFromZero)
-            : (int)Math.Floor(Raw(a, b) * SubmarineDistanceFactor);
+        => LegOverride?.Invoke(a, b, 100).Distance ?? LegDistanceFormula(a, b);
 
     /// <summary>Seconds spent travelling a leg.</summary>
     public static int LegSeconds(SectorInfo a, SectorInfo b, int speed)
-    {
-        speed = Math.Max(1, speed);
-        var raw = Raw(a, b);
-        if (a.Type == VesselType.Airship)
-        {
-            var units = Raw(a, b) * AirshipDistanceFactor;
-            return (int)Math.Floor(units * AirshipTravelMinutesPerUnit / speed * 60.0);
-        }
-
-        return (int)Math.Floor(raw * SubmarineTravelFactor / (speed * 100.0) * 60.0);
-    }
+        => LegOverride?.Invoke(a, b, Math.Max(1, speed)).Seconds ?? LegSecondsFormula(a, b, speed);
 
     /// <summary>Seconds spent surveying one sector.</summary>
     public static int SurveySeconds(SectorInfo sector, int speed)
+        => SurveyOverride?.Invoke(sector, Math.Max(1, speed)) ?? SurveySecondsFormula(sector, speed);
+
+    public static int LegDistanceFormula(SectorInfo a, SectorInfo b)
+        => a.Type == VesselType.Airship
+            ? (int)Math.Floor(Raw(a, b) * AirshipDistanceFactor)
+            : (int)Math.Floor(Raw(a, b) * SubmarineDistanceFactor);
+
+    public static int LegSecondsFormula(SectorInfo a, SectorInfo b, int speed)
+    {
+        speed = Math.Max(1, speed);
+        var raw = Raw(a, b);
+        return a.Type == VesselType.Airship
+            ? (int)Math.Floor(raw * AirshipTravelFactor / speed)
+            : (int)Math.Floor(raw * SubmarineTravelFactor / (speed * 100.0) * 60.0);
+    }
+
+    public static int SurveySecondsFormula(SectorInfo sector, int speed)
     {
         speed = Math.Max(1, speed);
         return sector.Type == VesselType.Airship

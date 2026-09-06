@@ -42,6 +42,25 @@ public sealed record RouteResult(
 }
 
 /// <summary>
+/// Per-request leg tables (row 0 = start, rows 1..n = candidates). Built on the calling thread so that in-game the
+/// client's voyage functions are only ever invoked from the main thread; the search itself can then run anywhere.
+/// </summary>
+public sealed class LegTables
+{
+    public required SectorInfo[] Points { get; init; }
+    public required int[,] Distance { get; init; }
+    public required int[,] Seconds { get; init; }
+    public required int[] SurveyDistance { get; init; }
+    public required int[] SurveySeconds { get; init; }
+    public required int[] Fuel { get; init; }
+    public required uint[] ExpGuaranteed { get; init; }
+    public required uint[] ExpAverage { get; init; }
+    public required uint[] ExpMaximum { get; init; }
+
+    public int Count => Points.Length - 1;
+}
+
+/// <summary>
 /// Exhaustive search over every set of up to five allowed sectors containing the must-includes, each in its shortest
 /// order, filtered by range, fuel and duration cap, ranked by the goal. Small enough to run in well under a second on
 /// a background thread even for a maxed submarine with a whole map unlocked.
@@ -83,30 +102,14 @@ public static class RouteSearch
                         && (req.IgnoreUnlocks || req.Unlocked.Contains(s.Id) || req.MustInclude.Contains(s.Id)))
             .ToList();
 
-    public static RouteResult? FindBest(GameData data, RouteRequest req, CancellationToken ct = default)
-        => FindTop(data, req, 1, ct).FirstOrDefault();
-
-    public static List<RouteResult> FindTop(GameData data, RouteRequest req, int count, CancellationToken ct = default)
+    /// <summary>Leg distances, times, survey costs and per-sector EXP for the request's candidates.</summary>
+    public static LegTables BuildTables(GameData data, RouteRequest req)
     {
         var candidates = Candidates(data, req);
-        if (candidates.Count == 0 || req.MustInclude.Count > req.MaxSectors)
-            return new List<RouteResult>();
-
-        var index = new Dictionary<uint, int>();
-        for (var i = 0; i < candidates.Count; i++)
-            index[candidates[i].Id] = i;
-
-        foreach (var m in req.MustInclude)
-        {
-            if (!index.ContainsKey(m))
-                return new List<RouteResult>();
-        }
-
         var start = data.StartFor(req.Type, req.Map);
         var n = candidates.Count;
         var speed = Math.Max(1, req.Build.Speed);
 
-        // Leg tables: row 0 = start, rows 1..n = candidates.
         var points = new SectorInfo[n + 1];
         points[0] = start;
         for (var i = 0; i < n; i++)
@@ -142,7 +145,36 @@ public static class RouteSearch
             expM[i] = e.Maximum;
         }
 
-        var must = req.MustInclude.Select(m => index[m] + 1).OrderBy(i => i).ToArray();
+        return new LegTables
+        {
+            Points = points, Distance = dist, Seconds = secs, SurveyDistance = surveyDist, SurveySeconds = surveySecs,
+            Fuel = fuel, ExpGuaranteed = expG, ExpAverage = expA, ExpMaximum = expM,
+        };
+    }
+
+    public static RouteResult? FindBest(GameData data, RouteRequest req, CancellationToken ct = default)
+        => FindTop(data, req, 1, ct).FirstOrDefault();
+
+    public static List<RouteResult> FindTop(GameData data, RouteRequest req, int count, CancellationToken ct = default)
+        => FindTop(req, BuildTables(data, req), count, ct);
+
+    public static List<RouteResult> FindTop(RouteRequest req, LegTables t, int count, CancellationToken ct = default)
+    {
+        var n = t.Count;
+        if (n == 0 || req.MustInclude.Count > req.MaxSectors)
+            return new List<RouteResult>();
+
+        var index = new Dictionary<uint, int>();
+        for (var i = 1; i <= n; i++)
+            index[t.Points[i].Id] = i;
+
+        foreach (var m in req.MustInclude)
+        {
+            if (!index.ContainsKey(m))
+                return new List<RouteResult>();
+        }
+
+        var must = req.MustInclude.Select(m => index[m]).OrderBy(i => i).ToArray();
         var free = Enumerable.Range(1, n).Where(i => Array.IndexOf(must, i) < 0).ToArray();
         var maxFree = req.MaxSectors - must.Length;
 
@@ -157,10 +189,10 @@ public static class RouteSearch
         var capSeconds = req.DurationCap is { } cap ? (long)cap.TotalSeconds : long.MaxValue;
         var useAverage = req.UseAverageBonus;
 
-        var results = combos
+        return combos
             .AsParallel()
             .WithCancellation(ct)
-            .Select(set => Evaluate(set, dist, secs, surveyDist, surveySecs, range))
+            .Select(set => Evaluate(set, t, range))
             .Where(r => r.Distance >= 0)
             .Select(r =>
             {
@@ -168,27 +200,25 @@ public static class RouteSearch
                 ulong g = 0, a = 0, m = 0;
                 foreach (var i in r.Order)
                 {
-                    f += fuel[i];
-                    g += expG[i];
-                    a += expA[i];
-                    m += expM[i];
+                    f += t.Fuel[i];
+                    g += t.ExpGuaranteed[i];
+                    a += t.ExpAverage[i];
+                    m += t.ExpMaximum[i];
                 }
 
                 var exp = new RouteExp((uint)g, (uint)a, (uint)m);
                 var duration = TimeSpan.FromSeconds(r.Seconds + VoyageMath.FixedVoyageSeconds);
                 var used = useAverage ? a : g;
                 var score = req.Goal == RouteGoal.ExpPerHour ? used / duration.TotalHours : used;
-                return (Result: new RouteResult(r.Order.Select(i => points[i].Id).ToArray(), r.Distance, duration, f, exp, score), Seconds: r.Seconds, Fuel: f);
+                return (Result: new RouteResult(r.Order.Select(i => t.Points[i].Id).ToArray(), r.Distance, duration, f, exp, score), Seconds: r.Seconds, Fuel: f);
             })
-            .Where(t => t.Seconds + VoyageMath.FixedVoyageSeconds <= capSeconds)
-            .Where(t => req.FuelAvailable < 0 || t.Fuel <= req.FuelAvailable)
-            .Select(t => t.Result)
+            .Where(x => x.Seconds + VoyageMath.FixedVoyageSeconds <= capSeconds)
+            .Where(x => req.FuelAvailable < 0 || x.Fuel <= req.FuelAvailable)
+            .Select(x => x.Result)
             .OrderByDescending(r => r.Score)
             .ThenBy(r => r.Duration)
             .Take(count)
             .ToList();
-
-        return results;
     }
 
     private static void Combinations(int[] free, int from, int filled, int[] buffer, int remaining, List<int[]> output)
@@ -209,33 +239,33 @@ public static class RouteSearch
     private readonly record struct Ordered(int[] Order, int Distance, long Seconds);
 
     /// <summary>Shortest ordering of a sector set by distance; Distance = -1 when nothing fits the range.</summary>
-    private static Ordered Evaluate(int[] set, int[,] dist, int[,] secs, int[] surveyDist, int[] surveySecs, int range)
+    private static Ordered Evaluate(int[] set, LegTables t, int range)
     {
         var best = new Ordered(Array.Empty<int>(), -1, 0);
         var bestDistance = int.MaxValue;
         var perm = (int[])set.Clone();
-        Permute(perm, 0, ref best, ref bestDistance, dist, secs, surveyDist, surveySecs, range);
+        Permute(perm, 0, ref best, ref bestDistance, t, range);
         return best;
     }
 
-    private static void Permute(int[] perm, int k, ref Ordered best, ref int bestDistance, int[,] dist, int[,] secs, int[] surveyDist, int[] surveySecs, int range)
+    private static void Permute(int[] perm, int k, ref Ordered best, ref int bestDistance, LegTables t, int range)
     {
         if (k == perm.Length)
         {
             var d = 0;
-            long t = 0;
+            long secs = 0;
             var prev = 0;
             foreach (var i in perm)
             {
-                d += dist[prev, i] + surveyDist[i];
-                t += secs[prev, i] + surveySecs[i];
+                d += t.Distance[prev, i] + t.SurveyDistance[i];
+                secs += t.Seconds[prev, i] + t.SurveySeconds[i];
                 prev = i;
             }
 
-            if (d <= range && (d < bestDistance || (d == bestDistance && t < best.Seconds)))
+            if (d <= range && (d < bestDistance || (d == bestDistance && secs < best.Seconds)))
             {
                 bestDistance = d;
-                best = new Ordered((int[])perm.Clone(), d, t);
+                best = new Ordered((int[])perm.Clone(), d, secs);
             }
 
             return;
@@ -244,7 +274,7 @@ public static class RouteSearch
         for (var i = k; i < perm.Length; i++)
         {
             (perm[k], perm[i]) = (perm[i], perm[k]);
-            Permute(perm, k + 1, ref best, ref bestDistance, dist, secs, surveyDist, surveySecs, range);
+            Permute(perm, k + 1, ref best, ref bestDistance, t, range);
             (perm[k], perm[i]) = (perm[i], perm[k]);
         }
     }

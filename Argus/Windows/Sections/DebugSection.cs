@@ -22,7 +22,7 @@ internal static unsafe class DebugSection
 
     public static void Draw(Plugin plugin)
     {
-        MainWindow.PageHeader("Debug", "Verification helpers. Not compiled into Release.");
+        MainWindow.PageHeader("Debug", "Verification helpers. Not compiled into Release. Live planning already uses the client voyage functions; the comparisons below test the offline formulas.");
         var scale = ImGuiHelpers.GlobalScale;
 
         if (Buttons.Action("Compare airship legs with the game", true, 280f * scale))
@@ -98,11 +98,11 @@ internal static unsafe class DebugSection
             uint time = 0, distance = 0;
             HousingManager.GetAirshipVoyageTimeAndDistance(127, (byte)s.Id, speed, &time, &distance);
             var survey = HousingManager.GetAirshipSurveyDuration((byte)s.Id, speed);
-            var mineD = VoyageMath.LegDistance(start, s);
-            var mineT = VoyageMath.LegSeconds(start, s, speed);
-            var mineS = VoyageMath.SurveySeconds(s, speed);
+            var mineD = VoyageMath.LegDistanceFormula(start, s);
+            var mineT = VoyageMath.LegSecondsFormula(start, s, speed);
+            var mineS = VoyageMath.SurveySecondsFormula(s, speed);
             var flag = mineD == distance && Math.Abs(mineT - (int)time) <= 60 && Math.Abs(mineS - (int)survey) <= 60 ? "ok" : "MISMATCH";
-            lines.Add($"{s.Letter}: game d={distance} t={time}s survey={survey}s | mine d={mineD} t={mineT}s survey={mineS}s  {flag}");
+            lines.Add($"{s.Letter}: game d={distance} t={time}s survey={survey}s | formula d={mineD} t={mineT}s survey={mineS}s  {flag}");
         }
 
         return lines;
@@ -118,11 +118,11 @@ internal static unsafe class DebugSection
             var distance = HousingManager.GetSubmarineVoyageDistance((byte)start.Id, (byte)s.Id);
             var time = HousingManager.GetSubmarineVoyageTime((byte)start.Id, (byte)s.Id, speed);
             var survey = HousingManager.GetSubmarineSurveyDuration((byte)s.Id, speed);
-            var mineD = VoyageMath.LegDistance(start, s);
-            var mineT = VoyageMath.LegSeconds(start, s, speed);
-            var mineS = VoyageMath.SurveySeconds(s, speed);
+            var mineD = VoyageMath.LegDistanceFormula(start, s);
+            var mineT = VoyageMath.LegSecondsFormula(start, s, speed);
+            var mineS = VoyageMath.SurveySecondsFormula(s, speed);
             var flag = mineD == distance && Math.Abs(mineT - (int)time) <= 60 && Math.Abs(mineS - (int)survey) <= 60 ? "ok" : "MISMATCH";
-            lines.Add($"{s.Letter}: game d={distance} t={time}s survey={survey}s | mine d={mineD} t={mineT}s survey={mineS}s  {flag}");
+            lines.Add($"{s.Letter}: game d={distance} t={time}s survey={survey}s | formula d={mineD} t={mineT}s survey={mineS}s  {flag}");
         }
 
         return lines;

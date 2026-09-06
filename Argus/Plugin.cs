@@ -44,6 +44,7 @@ public sealed class Plugin : IDalamudPlugin
 
         Sheets.Initialize();
         Data = GameDataLoader.Load();
+        ClientVoyageMath.Install();
 
         Config = Service.PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
         Fleet = new FleetService(Config, Service.PluginInterface.GetPluginConfigDirectory());
@@ -134,6 +135,7 @@ public sealed class Plugin : IDalamudPlugin
         plannerOverlay.Dispose();
         Planner.Dispose();
 
+        ClientVoyageMath.Uninstall();
         ECommonsMain.Dispose();
     }
 }

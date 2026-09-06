@@ -196,13 +196,15 @@ internal sealed class PlannerService : IDisposable
         running = cts;
         Computing = true;
         ComputeStartedUtc = DateTime.UtcNow;
-        var data = plugin.Data;
+        // Leg tables call the client's voyage functions, so they are built here on the framework thread; only the
+        // combinatorial search runs on the pool.
+        var tables = RouteSearch.BuildTables(plugin.Data, req);
 
         Task.Run(() =>
         {
             try
             {
-                var top = RouteSearch.FindTop(data, req, 10, cts.Token);
+                var top = RouteSearch.FindTop(req, tables, 10, cts.Token);
                 if (cts.IsCancellationRequested)
                     return;
                 Results = top;

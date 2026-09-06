@@ -321,3 +321,55 @@ public class RouteSearchTests
         Assert.Equal(best.Exp, described.Exp);
     }
 }
+
+public class ClientReadoutTests
+{
+    private readonly GameData data = GameDataFixture.Load();
+
+    // (row, distance, travel seconds, survey seconds) from HousingManager.GetAirshipVoyageTimeAndDistance /
+    // GetAirshipSurveyDuration at speed 100, start point 127, captured in-game on 2026-09-05.
+    private static readonly (uint Row, int Distance, int Seconds, int Survey)[] AirshipStartLegs =
+    {
+        (0, 7, 5280, 7560), (1, 9, 6540, 7560), (2, 18, 12600, 7560), (3, 16, 11340, 7560),
+        (4, 10, 7380, 15120), (5, 16, 11160, 15120), (6, 15, 10740, 15120),
+        (7, 19, 13740, 22680), (8, 23, 15960, 22680), (9, 19, 13620, 22680),
+        (10, 24, 16740, 30240), (11, 26, 18300, 30240), (12, 29, 20280, 30240),
+        (13, 24, 16860, 37800), (14, 36, 24840, 37800), (15, 32, 22500, 37800),
+        (16, 33, 22860, 60480), (17, 29, 19980, 60480), (18, 38, 26220, 60480), (19, 40, 28260, 60480),
+        (20, 37, 25920, 60480), (21, 43, 30180, 60480), (23, 45, 31620, 60480), (24, 28, 19860, 60480),
+    };
+
+    [Fact]
+    public void AirshipFormulasMatchTheClientReadout()
+    {
+        var start = data.AirshipStart;
+        foreach (var (row, distance, seconds, survey) in AirshipStartLegs)
+        {
+            var s = data.Sector(VesselType.Airship, row);
+            Assert.Equal(distance, VoyageMath.LegDistanceFormula(start, s));
+            Assert.InRange(VoyageMath.LegSecondsFormula(start, s, 100), seconds - 60, seconds + 60);
+            Assert.Equal(survey, VoyageMath.SurveySecondsFormula(s, 100));
+        }
+    }
+
+    [Fact]
+    public void OverridesTakePrecedenceOverFormulas()
+    {
+        var start = data.AirshipStart;
+        var a = data.Sector(VesselType.Airship, 0);
+        try
+        {
+            VoyageMath.LegOverride = (_, _, _) => (123, 4560);
+            VoyageMath.SurveyOverride = (_, _) => 789;
+            Assert.Equal(123 + a.SurveyDistance, VoyageMath.RouteDistance(start, new[] { a }));
+            Assert.Equal(4560 + 789 + VoyageMath.FixedVoyageSeconds, (int)VoyageMath.RouteDuration(start, new[] { a }, 100).TotalSeconds);
+        }
+        finally
+        {
+            VoyageMath.LegOverride = null;
+            VoyageMath.SurveyOverride = null;
+        }
+
+        Assert.Equal(7 + a.SurveyDistance, VoyageMath.RouteDistance(start, new[] { a }));
+    }
+}
