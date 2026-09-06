@@ -71,12 +71,24 @@ public sealed class Vessel
     public bool SameIdentity(Vessel other) => FreeCompanyId == other.FreeCompanyId && Type == other.Type && Slot == other.Slot;
 
     public bool SameState(Vessel other)
-        => SameIdentity(other)
-           && Name == other.Name && Rank == other.Rank && CurrentExp == other.CurrentExp
-           && Hull == other.Hull && Stern == other.Stern && Bow == other.Bow && Bridge == other.Bridge
-           && RegisterTime == other.RegisterTime && ReturnTime == other.ReturnTime
-           && Surveillance == other.Surveillance && Retrieval == other.Retrieval && Speed == other.Speed
-           && Range == other.Range && Favor == other.Favor;
+    {
+        if (!SameIdentity(other)
+            || Name != other.Name || Rank != other.Rank || CurrentExp != other.CurrentExp
+            || Hull != other.Hull || Stern != other.Stern || Bow != other.Bow || Bridge != other.Bridge
+            || RegisterTime != other.RegisterTime || ReturnTime != other.ReturnTime
+            || Surveillance != other.Surveillance || Retrieval != other.Retrieval || Speed != other.Speed
+            || Range != other.Range || Favor != other.Favor
+            || Points.Count != other.Points.Count)
+            return false;
+
+        for (var i = 0; i < Points.Count; i++)
+        {
+            if (Points[i] != other.Points[i])
+                return false;
+        }
+
+        return true;
+    }
 }
 
 /// <summary>Everything Argus remembers about one Free Company.</summary>

@@ -115,6 +115,62 @@ internal static unsafe class WorkshopReader
         return result;
     }
 
+    /// <summary>
+    /// Why a read did or did not happen this tick, for the Debug page. Comparing successive probes shows whether the
+    /// game refreshes the workshop data on its own or only when the voyage panel is opened.
+    /// </summary>
+    public readonly record struct Probe(
+        bool HousingManager,
+        bool WorkshopTerritory,
+        bool IslandSanctuary,
+        uint Territory,
+        ulong FreeCompanyId,
+        int Submarines,
+        int Airships,
+        uint FirstSubReturn,
+        uint FirstAirReturn);
+
+    public static Probe Inspect()
+    {
+        var territory = Service.ClientState.TerritoryType;
+        var hm = FFXIVClientStructs.FFXIV.Client.Game.HousingManager.Instance();
+        if (hm == null)
+            return new Probe(false, false, false, territory, 0, 0, 0, 0, 0);
+
+        var fcId = CurrentFreeCompanyId();
+        if (hm->WorkshopTerritory == null)
+            return new Probe(true, false, false, territory, fcId, 0, 0, 0, 0);
+
+        var row = Service.DataManager.GetExcelSheet<TerritoryType>().GetRowOrDefault(territory);
+        var island = row is { } r && r.TerritoryIntendedUse.RowId == IslandSanctuaryIntendedUse;
+
+        var ws = hm->WorkshopTerritory;
+        int subs = 0, airships = 0;
+        uint subReturn = 0, airReturn = 0;
+
+        var subData = ws->Submersible.Data;
+        for (var i = 0; i < subData.Length; i++)
+        {
+            if (subData[i].RankId == 0)
+                continue;
+            subs++;
+            if (subReturn == 0)
+                subReturn = subData[i].ReturnTime;
+        }
+
+        var airData = ws->Airship.Data;
+        for (var i = 0; i < airData.Length; i++)
+        {
+            if (airData[i].RankId == 0)
+                continue;
+            airships++;
+            if (airReturn == 0)
+                airReturn = airData[i].ReturnTime;
+        }
+
+        return new Probe(true, true, island, territory, fcId, subs, airships, subReturn, airReturn);
+    }
+
     /// <summary>Items of one kind in the player's bags (what dispatch and repair actually consume); -1 when unavailable.</summary>
     public static int CountInventory(uint itemId)
     {

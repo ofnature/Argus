@@ -29,6 +29,21 @@ internal sealed class FleetService
 
     public bool InWorkshop { get; private set; }
 
+    /// <summary>Last workshop probe, for the Debug page.</summary>
+    public WorkshopReader.Probe LastProbe { get; private set; }
+
+    private readonly List<string> log = new();
+
+    /// <summary>Newest first: every change in what the workshop read can see.</summary>
+    public IReadOnlyList<string> Log => log;
+
+    private void Note(string text)
+    {
+        log.Insert(0, $"{DateTime.Now:HH:mm:ss}  {text}");
+        if (log.Count > 24)
+            log.RemoveAt(log.Count - 1);
+    }
+
     /// <summary>Raised when the vessel list of an FC changed (new dispatch, return collected, rank up...).</summary>
     public event Action<ulong>? FleetChanged;
 
@@ -43,6 +58,16 @@ internal sealed class FleetService
 
     public void Update(DateTime nowUtc)
     {
+        // The probe is a pure read; a change in it is exactly what the Debug page needs to see.
+        var probe = WorkshopReader.Inspect();
+        if (!probe.Equals(LastProbe))
+        {
+            Note(probe.WorkshopTerritory
+                ? $"workshop visible · FC {probe.FreeCompanyId:X} · {probe.Submarines} subs, {probe.Airships} airships · returns {probe.FirstSubReturn}/{probe.FirstAirReturn}"
+                : $"workshop not readable (HousingManager {(probe.HousingManager ? "ok" : "null")}, territory {probe.Territory})");
+            LastProbe = probe;
+        }
+
         InWorkshop = Service.ClientState.IsLoggedIn && WorkshopReader.IsWorkshopLoaded();
         if (InWorkshop && !wasInWorkshop)
             WorkshopEntered?.Invoke();
@@ -90,6 +115,7 @@ internal sealed class FleetService
         if (Store.UpdateVessels(fcId, vessels, nowUtc))
         {
             RefreshUnlocks(record);
+            Note($"fleet stored: {vessels.Count} vessels for FC {fcId:X}");
             FleetChanged?.Invoke(fcId);
         }
 
