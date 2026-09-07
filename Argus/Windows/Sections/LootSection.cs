@@ -83,7 +83,8 @@ internal static class LootSection
             return;
         }
 
-        if (ImGui.CollapsingHeader("Totals by sector"))
+        var sectorCount = rows.Select(e => (e.Type, e.Sector)).Distinct().Count();
+        if (ImGui.CollapsingHeader($"Totals by sector ({sectorCount})###loot_totals_header"))
             DrawTotals(plugin, rows);
 
         using var table = ImRaii.Table("##loot_rows", 6, ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.ScrollY, new System.Numerics.Vector2(0, 0));
@@ -138,39 +139,64 @@ internal static class LootSection
         return parts.Count == 0 ? "—" : string.Join(", ", parts);
     }
 
+    /// <summary>One expandable row per sector: hauls and EXP on the header, every item it has ever produced inside.</summary>
     private static void DrawTotals(Plugin plugin, List<LootEntry> rows)
     {
         var data = plugin.Data;
-        var bySector = rows.GroupBy(e => (e.Type, e.Sector)).OrderBy(g => g.Key.Type).ThenBy(g => g.Key.Sector);
-        using var table = ImRaii.Table("##loot_totals", 4, ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.SizingFixedFit);
-        if (!table.Success)
-            return;
-
-        ImGui.TableSetupColumn("Sector", ImGuiTableColumnFlags.WidthStretch);
-        ImGui.TableSetupColumn("Hauls");
-        ImGui.TableSetupColumn("Avg EXP");
-        ImGui.TableSetupColumn("Items (total)", ImGuiTableColumnFlags.WidthStretch);
-        ImGui.TableHeadersRow();
-
-        foreach (var g in bySector)
+        foreach (var g in rows.GroupBy(e => (e.Type, e.Sector)).OrderBy(x => x.Key.Type).ThenBy(x => x.Key.Sector))
         {
-            ImGui.TableNextRow();
-            ImGui.TableNextColumn();
-            var name = data.Sectors(g.Key.Type).TryGetValue(g.Key.Sector, out var s) ? $"{s.Letter}. {s.Name}" : g.Key.Sector.ToString();
-            Styling.Text($"{(g.Key.Type == VesselType.Submarine ? "S" : "A")} · {name}", Styling.TextStrong);
-            ImGui.TableNextColumn();
-            Styling.Text(g.Count().ToString(), Styling.TextSecondary);
-            ImGui.TableNextColumn();
-            Styling.Text(Formatting.Number((long)g.Average(e => e.ExpGained)), Styling.TextSecondary);
-            ImGui.TableNextColumn();
-            var items = g.SelectMany(e => new[] { (e.PrimaryItem, e.PrimaryCount), (e.AdditionalItem, e.AdditionalCount) })
-                .Where(t => t.Item1 != 0)
-                .GroupBy(t => t.Item1)
-                .OrderByDescending(x => x.Sum(t => t.Item2))
-                .Take(6)
-                .Select(x => $"{Sheets.ItemName(x.Key)} ×{x.Sum(t => t.Item2)}");
-            Styling.Text(string.Join(", ", items), Styling.TextSecondary);
+            var name = data.Sectors(g.Key.Type).TryGetValue(g.Key.Sector, out var s)
+                ? $"{s.Letter}. {s.Name}"
+                : g.Key.Sector == 0 ? "unknown sector" : $"sector {g.Key.Sector}";
+            var hauls = g.Count();
+            var exp = g.Sum(e => (long)e.ExpGained);
+
+            var open = ImGui.TreeNodeEx($"{(g.Key.Type == VesselType.Submarine ? "S" : "A")} · {name}##totals{g.Key.Type}{g.Key.Sector}",
+                ImGuiTreeNodeFlags.SpanAvailWidth);
+            ImGui.SameLine();
+            Styling.Text($"{hauls} haul{(hauls == 1 ? string.Empty : "s")} · {Formatting.Number(exp)} EXP · {Formatting.Number(exp / hauls)} avg", Styling.TextDim);
+            if (!open)
+                continue;
+
+            var items = g.SelectMany(ItemsOf)
+                .GroupBy(i => i.Id)
+                .Select(i => (Id: i.Key, Count: i.Sum(x => x.Count), Hq: i.Sum(x => x.Hq)))
+                .OrderByDescending(i => i.Count)
+                .ToList();
+
+            using (var table = ImRaii.Table($"##items{g.Key.Type}{g.Key.Sector}", 3, ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingFixedFit))
+            {
+                if (table.Success)
+                {
+                    ImGui.TableSetupColumn("Item", ImGuiTableColumnFlags.WidthStretch);
+                    ImGui.TableSetupColumn("Total");
+                    ImGui.TableSetupColumn("HQ");
+                    ImGui.TableHeadersRow();
+
+                    foreach (var (id, count, hq) in items)
+                    {
+                        ImGui.TableNextRow();
+                        ImGui.TableNextColumn();
+                        Styling.Text(Sheets.ItemName(id), Styling.TextSecondary);
+                        ImGui.TableNextColumn();
+                        Styling.Text(Formatting.Number(count), Styling.TextStrong);
+                        ImGui.TableNextColumn();
+                        Styling.Text(hq > 0 ? Formatting.Number(hq) : "—", hq > 0 ? Styling.AccentAmber : Styling.TextMuted);
+                    }
+                }
+            }
+
+            ImGui.TreePop();
         }
+    }
+
+    /// <summary>Both reward slots of one haul as (item, quantity, quantity that came back HQ).</summary>
+    private static IEnumerable<(uint Id, int Count, int Hq)> ItemsOf(LootEntry e)
+    {
+        if (e.PrimaryItem != 0)
+            yield return (e.PrimaryItem, e.PrimaryCount, e.PrimaryHq ? e.PrimaryCount : 0);
+        if (e.AdditionalItem != 0)
+            yield return (e.AdditionalItem, e.AdditionalCount, e.AdditionalHq ? e.AdditionalCount : 0);
     }
 
     private static void Export(Plugin plugin)
