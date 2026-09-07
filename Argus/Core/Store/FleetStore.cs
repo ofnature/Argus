@@ -64,31 +64,44 @@ internal sealed class FleetStore
             return companies.Values.Where(c => !hidden.Contains(c.Id)).SelectMany(c => c.Vessels).ToList();
     }
 
-    /// <summary>Replace the vessel list for an FC. Returns true when anything actually changed.</summary>
+    /// <summary>
+    /// Merge a workshop read into an FC's vessel list, keyed on type and slot. Vessels the read did not contain are
+    /// kept: the client does not always populate both arrays, and a partial read must never delete a known vessel
+    /// (a registered submarine or airship cannot be given up in game, so there is nothing legitimate to remove).
+    /// Returns true when anything actually changed.
+    /// </summary>
     public bool UpdateVessels(ulong fcId, IReadOnlyList<Vessel> fresh, DateTime nowUtc)
     {
         lock (gate)
         {
             var record = GetOrCreate(fcId);
-            var changed = record.Vessels.Count != fresh.Count;
-            if (!changed)
+            record.LastSeenUtc = nowUtc;
+
+            var changed = false;
+            foreach (var v in fresh)
             {
-                foreach (var v in fresh)
+                var index = record.Vessels.FindIndex(v.SameIdentity);
+                if (index < 0)
                 {
-                    var existing = record.Vessels.FirstOrDefault(v.SameIdentity);
-                    if (existing == null || !existing.SameState(v))
-                    {
-                        changed = true;
-                        break;
-                    }
+                    record.Vessels.Add(v);
+                    changed = true;
+                }
+                else if (!record.Vessels[index].SameState(v))
+                {
+                    record.Vessels[index] = v;
+                    changed = true;
+                }
+                else
+                {
+                    // Unchanged, but seen this tick: that is what marks a row as still confirmed.
+                    record.Vessels[index].LastSeenUtc = nowUtc;
                 }
             }
 
-            record.LastSeenUtc = nowUtc;
             if (!changed)
                 return false;
 
-            record.Vessels = fresh.OrderBy(v => v.Type).ThenBy(v => v.Slot).ToList();
+            record.Vessels.Sort((a, b) => a.Type != b.Type ? a.Type.CompareTo(b.Type) : a.Slot.CompareTo(b.Slot));
             dirty = true;
             return true;
         }

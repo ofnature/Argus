@@ -14,6 +14,9 @@ namespace Argus.Windows.Sections;
 /// <summary>Stat strip per vessel type, then every FC as a card with one row per vessel: state pill, name, rank, timer.</summary>
 internal static class OverviewSection
 {
+    /// <summary>A vessel missing from the workshop read for this long, while its FC is live, is shown as cached.</summary>
+    private static readonly TimeSpan StaleAfter = TimeSpan.FromSeconds(30);
+
     public static void Draw(Plugin plugin)
     {
         var now = DateTime.UtcNow;
@@ -88,7 +91,8 @@ internal static class OverviewSection
         ImGui.SameLine();
         var who = string.IsNullOrEmpty(fc.World) ? fc.CharacterName : $"{fc.CharacterName} @ {fc.World}";
         Styling.Text(who, Styling.TextDim);
-        if (fc.Id == plugin.Fleet.CurrentFreeCompanyId)
+        var live = fc.Id == plugin.Fleet.CurrentFreeCompanyId;
+        if (live)
         {
             ImGui.SameLine();
             Pill.Draw("LIVE", Styling.AccentMint);
@@ -104,7 +108,7 @@ internal static class OverviewSection
 
             Styling.SectionLabel(type == VesselType.Submarine ? "Submarines" : "Airships");
             foreach (var v in vessels)
-                DrawVesselRow(v, now, inner);
+                DrawVesselRow(v, now, inner, live);
         }
 
         DrawSupplies(plugin, fc);
@@ -141,8 +145,9 @@ internal static class OverviewSection
             Styling.Text($"counted {Formatting.Duration(DateTime.UtcNow - fc.SuppliesSeenUtc)} ago", Styling.TextMuted);
     }
 
-    private static void DrawVesselRow(Vessel v, DateTime now, float width)
+    private static void DrawVesselRow(Vessel v, DateTime now, float width, bool live)
     {
+        var stale = live && now - v.LastSeenUtc > StaleAfter;
         var scale = ImGuiHelpers.GlobalScale;
         var origin = ImGui.GetCursorScreenPos();
         var height = 30f * scale;
@@ -157,7 +162,7 @@ internal static class OverviewSection
         var midY = origin.Y + height * 0.5f;
 
         var nameSize = ImGui.CalcTextSize(v.Name);
-        dl.AddText(new Vector2(x, midY - nameSize.Y * 0.5f), ImGui.GetColorU32(Styling.TextStrong), v.Name);
+        dl.AddText(new Vector2(x, midY - nameSize.Y * 0.5f), ImGui.GetColorU32(stale ? Styling.TextSecondary : Styling.TextStrong), v.Name);
         x += nameSize.X + 10f * scale;
 
         var rank = $"Rank {v.Rank}";
@@ -186,10 +191,20 @@ internal static class OverviewSection
         dl.AddText(new Vector2(origin.X + width - rightSize.X, midY - rightSize.Y * 0.5f), ImGui.GetColorU32(rightColor), right);
 
         ImGui.Dummy(new Vector2(width, height));
-        if (v.Type == VesselType.Submarine && v.Points.Count > 0 && ImGui.IsItemHovered())
+        if (!ImGui.IsItemHovered())
+            return;
+
+        var tooltip = new List<string>();
+        if (v.Type == VesselType.Submarine && v.Points.Count > 0)
         {
             var names = v.Points.Select(p => Sheets.SubmarineSectors.GetRowOrDefault(p)?.Location.ExtractText() ?? p.ToString());
-            ImGui.SetTooltip($"Route: {string.Join(" → ", names)}");
+            tooltip.Add($"Route: {string.Join(" → ", names)}");
         }
+
+        if (stale)
+            tooltip.Add($"Cached: the workshop read has not seen this vessel for {Formatting.Duration(now - v.LastSeenUtc)}.");
+
+        if (tooltip.Count > 0)
+            ImGui.SetTooltip(string.Join("\n", tooltip));
     }
 }
