@@ -21,7 +21,11 @@ internal static class OverviewSection
     {
         var now = DateTime.UtcNow;
         var fleet = plugin.Fleet;
-        MainWindow.PageHeader("Overview", fleet.InWorkshop ? "Reading the workshop live." : "Last known state. Stand in a company workshop to refresh.");
+        MainWindow.PageHeader("Overview", fleet.InWorkshop
+            ? fleet.HasLiveVessels
+                ? "Reading the workshop live."
+                : "In the workshop, but the client has not loaded the vessel data. Open the Voyage Control Panel once to refresh it."
+            : "Last known state. Stand in a company workshop to refresh.");
 
         var subs = fleet.CountsFor(VesselType.Submarine, now);
         var air = fleet.CountsFor(VesselType.Airship, now);
@@ -91,7 +95,7 @@ internal static class OverviewSection
         ImGui.SameLine();
         var who = string.IsNullOrEmpty(fc.World) ? fc.CharacterName : $"{fc.CharacterName} @ {fc.World}";
         Styling.Text(who, Styling.TextDim);
-        var live = fc.Id == plugin.Fleet.CurrentFreeCompanyId;
+        var live = fc.Id == plugin.Fleet.CurrentFreeCompanyId && plugin.Fleet.HasLiveVessels;
         if (live)
         {
             ImGui.SameLine();

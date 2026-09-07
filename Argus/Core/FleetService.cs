@@ -29,6 +29,15 @@ internal sealed class FleetService
 
     public bool InWorkshop { get; private set; }
 
+    /// <summary>When a workshop read last returned at least one vessel.</summary>
+    public DateTime LastVesselReadUtc { get; private set; }
+
+    /// <summary>
+    /// In the workshop and the client has actually populated the vessel arrays. False while standing there before the
+    /// Voyage Control Panel has been used, when everything reads as zero.
+    /// </summary>
+    public bool HasLiveVessels => InWorkshop && DateTime.UtcNow - LastVesselReadUtc < TimeSpan.FromSeconds(5);
+
     /// <summary>Last workshop probe, for the Debug page.</summary>
     public WorkshopReader.Probe LastProbe { get; private set; }
 
@@ -95,6 +104,8 @@ internal sealed class FleetService
         var vessels = WorkshopReader.ReadVessels(fcId, nowUtc);
         if (vessels.Count == 0)
             return;
+
+        LastVesselReadUtc = nowUtc;
 
         var record = Store.GetOrCreate(fcId);
         var player = Service.ObjectTable.LocalPlayer;

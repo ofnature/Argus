@@ -39,8 +39,8 @@ internal static unsafe class DebugSection
         var p = plugin.Fleet.LastProbe;
         Styling.Text($"territory {p.Territory} · HousingManager {(p.HousingManager ? "ok" : "null")} · WorkshopTerritory {(p.WorkshopTerritory ? "ok" : "null")}{(p.IslandSanctuary ? " · island sanctuary (skipped)" : string.Empty)}",
             p.WorkshopTerritory ? Styling.TextSecondary : Styling.AccentRose);
-        Styling.Text($"FC {p.FreeCompanyId:X} · {p.Submarines} subs (first return {p.FirstSubReturn}) · {p.Airships} airships (first return {p.FirstAirReturn}) · in workshop = {plugin.Fleet.InWorkshop}", Styling.TextSecondary);
-        Styling.TextWrapped("Walk in without touching the panel: if these numbers appear on their own, the game refreshes by itself; if they only appear after opening the Voyage Control Panel, the client populates them then.", Styling.TextMuted);
+        Styling.Text($"FC {p.FreeCompanyId:X} · {p.Submarines} subs (first return {p.FirstSubReturn}) · {p.Airships} airships (first return {p.FirstAirReturn}) · in workshop = {plugin.Fleet.InWorkshop} · vessel data loaded = {plugin.Fleet.HasLiveVessels}", Styling.TextSecondary);
+        Styling.TextWrapped("Verified 2026-09-07: the client leaves both arrays zeroed until the Voyage Control Panel has been used this visit, and it fills only the side you opened. Zeros here before touching the panel are expected.", Styling.TextMuted);
         foreach (var line in plugin.Fleet.Log)
             Styling.Text(line, Styling.TextDim);
 
