@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using Argus.Core;
+using Argus.Core.Data;
 using Argus.Core.Calc;
 using Argus.Core.Model;
 using Argus.Windows.Components;
@@ -156,10 +157,108 @@ internal static class PlannerSection
         changed |= ToggleInline("Include locked", ref prefs.IgnoreUnlocks,
             "Plan with sectors the FC has not unlocked yet. For what-if planning; the in-game planner will refuse them.");
         ImGui.SameLine(0, 14f * scale);
+        var unlockWas = prefs.UnlockFocus;
         changed |= ToggleInline("Unlock focus", ref prefs.UnlockFocus,
             "Plan for discovering the next sector instead of EXP. Discovery is a roll on every survey of the progression sector, so this picks the shortest voyage through it and the Builder ranks parts by surveillance tier there, favor above its line (double-dip = a second roll) and speed. Needs Progression on.");
+        if (prefs.UnlockFocus && !unlockWas)
+            prefs.FarmItem = 0;
 
         Styling.VSpace(4f);
+        changed |= DrawFarmPicker(plugin, vessel, prefs);
+        return changed;
+    }
+
+    private static string itemFilter = string.Empty;
+
+    /// <summary>Pick an item to farm. Choosing one ranks routes by expected units of it instead of EXP.</summary>
+    private static bool DrawFarmPicker(Plugin plugin, Vessel vessel, PlannerPrefs prefs)
+    {
+        var planner = plugin.Planner;
+        var data = plugin.Data;
+        var scale = ImGuiHelpers.GlobalScale;
+
+        if (!LootTable.HasData(vessel.Type))
+        {
+            Styling.Text("No loot data for this vessel type.", Styling.TextMuted);
+            return false;
+        }
+
+        var changed = false;
+        Styling.Text("Farm", Styling.TextDim);
+        ImGui.SameLine();
+
+        var label = prefs.FarmItem == 0 ? "nothing (plan for EXP)" : Sheets.ItemName(prefs.FarmItem);
+        ImGui.SetNextItemWidth(320f * scale);
+        using (var combo = ImRaii.Combo("##planner_farm", label))
+        {
+            if (combo.Success)
+            {
+                ImGui.SetNextItemWidth(-1);
+                ImGui.InputTextWithHint("##farm_filter", "search", ref itemFilter, 64);
+
+                if (ImGui.Selectable("nothing (plan for EXP)", prefs.FarmItem == 0))
+                {
+                    prefs.FarmItem = 0;
+                    changed = true;
+                }
+
+                // Only what this map can actually produce, so the list stays short and relevant.
+                var reachable = data.DestinationsOf(vessel.Type, planner.Map).Select(x => x.Id);
+                var items = LootTable.ItemsFrom(vessel.Type, reachable)
+                    .Select(id => (Id: id, Name: Sheets.ItemName(id)))
+                    .Where(x => itemFilter.Length == 0 || x.Name.Contains(itemFilter, StringComparison.OrdinalIgnoreCase))
+                    .OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+                    .Take(200);
+
+                foreach (var (id, name) in items)
+                {
+                    if (!ImGui.Selectable($"{name}##farm{id}", prefs.FarmItem == id))
+                        continue;
+                    prefs.FarmItem = id;
+                    prefs.UnlockFocus = false;
+                    changed = true;
+                }
+            }
+        }
+
+        if (prefs.FarmItem == 0)
+            return changed;
+
+        ImGui.SameLine();
+        if (Buttons.Icon(FontAwesomeIcon.Times, "##farm_clear", 24f * scale, "Stop farming"))
+        {
+            prefs.FarmItem = 0;
+            changed = true;
+        }
+
+        Build? build = null;
+        try { build = Build.From(data, vessel); } catch (KeyNotFoundException) { }
+        if (build == null)
+            return changed;
+
+        var sources = ItemYield.Sources(data, vessel.Type, planner.Map, prefs.FarmItem, build.Surveillance, build.Retrieval);
+        if (sources.Count == 0)
+        {
+            // Surveillance promotes a sector to a richer loot pool, which can drop the basic items entirely.
+            var atLowerTier = data.DestinationsOf(vessel.Type, planner.Map).Any(sec =>
+            {
+                var reached = PartOptimizer.SurveillanceTier(ExpModel.ThresholdsFor(vessel.Type, sec.Id), build.Surveillance);
+                return Enumerable.Range(0, reached).Any(tier => LootTable.Drops(vessel.Type, sec.Id, tier).Any(d => d.ItemId == prefs.FarmItem));
+            });
+
+            Styling.TextWrapped(atLowerTier
+                ? "This build's surveillance is too high for that item here: it only appears in the lower loot tiers, and the sectors that carry it now roll on a richer pool. A lower surveillance build would reach it."
+                : "No sector on this map produces that item at the surveillance tier this build reaches.", Styling.AccentRose);
+            return changed;
+        }
+
+        var rated = sources[0].PerVisit > 0 && vessel.Type == VesselType.Submarine;
+        var text = string.Join(" · ", sources.Take(8).Select(x =>
+        {
+            var letter = data.Sector(vessel.Type, x.Sector).Letter;
+            return rated ? $"{letter} {x.PerVisit:0.##}/visit ({x.Min}-{x.Max})" : letter;
+        }));
+        Styling.TextWrapped(rated ? $"Drops from: {text}" : $"Drops from: {text} (airship rates are unknown; sources only)", Styling.AccentTealSoft);
         return changed;
     }
 
@@ -349,6 +448,14 @@ internal static class PlannerSection
             var line = $"{Formatting.VoyageLength(r.Duration)} · {r.Distance}/{build?.Range ?? 0} range · {r.Fuel} fuel · " +
                        $"{Formatting.Number(exp)} EXP ({Formatting.Number(r.Exp.Guaranteed)}–{Formatting.Number(r.Exp.Maximum)}) · {Formatting.Number((long)perHour)}/h";
             Styling.Text(line, Styling.TextSecondary);
+
+            if (prefs.FarmItem != 0)
+            {
+                var yieldText = vessel.Type == VesselType.Submarine
+                    ? $"{Sheets.ItemName(prefs.FarmItem)}: ≈{r.ItemUnits:0.##} per voyage · {r.ItemUnitsPerHour * 24:0.##} per day"
+                    : $"{Sheets.ItemName(prefs.FarmItem)}: {r.ItemUnits:0} of {r.Sectors.Length} sectors can drop it";
+                Styling.Text(yieldText, r.ItemUnits > 0 ? Styling.AccentMint : Styling.TextMuted);
+            }
 
             if (build != null)
             {

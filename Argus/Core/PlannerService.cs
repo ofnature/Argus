@@ -176,7 +176,9 @@ internal sealed class PlannerService : IDisposable
             prefs.DurationCapHours > 0 ? TimeSpan.FromHours(prefs.DurationCapHours) : null,
             prefs.AverageBonus || v.Type == VesselType.Airship,
             fuel >= 0 ? fuel : -1,
-            prefs.IgnoreUnlocks);
+            prefs.IgnoreUnlocks,
+            VoyageMath.MaxSectorsPerVoyage,
+            prefs.UnlockFocus ? 0u : prefs.FarmItem);
     }
 
     /// <summary>Re-run the search when anything relevant changed. Cheap to call every frame.</summary>
@@ -235,7 +237,7 @@ internal sealed class PlannerService : IDisposable
         => string.Join("|",
             r.Type, r.Map, r.Build.Rank, r.Build.Hull.Id, r.Build.Stern.Id, r.Build.Bow.Id, r.Build.Bridge.Id,
             string.Join(",", r.Unlocked.OrderBy(x => x)), string.Join(",", r.MustInclude.OrderBy(x => x)),
-            r.Goal, r.DurationCap?.TotalHours ?? 0, r.UseAverageBonus, r.FuelAvailable, r.IgnoreUnlocks);
+            r.Goal, r.DurationCap?.TotalHours ?? 0, r.UseAverageBonus, r.FuelAvailable, r.IgnoreUnlocks, r.TargetItem);
 
     public void Dispose()
     {

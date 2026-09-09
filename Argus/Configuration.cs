@@ -29,6 +29,9 @@ public sealed class PlannerPrefs
     /// is a roll on every survey there) and builds ranked by surveillance tier, favor line and speed. Off by default.
     /// </summary>
     public bool UnlockFocus = false;
+
+    /// <summary>Item the planner is farming for; 0 plans for EXP. Mutually exclusive with <see cref="UnlockFocus"/>.</summary>
+    public uint FarmItem;
 }
 
 [Serializable]

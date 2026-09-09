@@ -22,5 +22,15 @@ FFXIV Airship Log Data — community spreadsheet maintained by Nyalia / Neri Fer
   and submarine.girin.dev — used to seed airship sector surveillance tiers and
   the airship EXP rating estimate (Argus/Core/Data/AirshipData.cs).
 
+FFXIVGachaSpreadsheet — https://github.com/Infiziert90/FFXIVGachaSpreadsheet
+  Crowd-sourced voyage records. Argus bakes the per-sector submarine loot pools
+  (per-draw chance and quantity range per retrieval tier) from
+  website/static/data/Submarines.json into Argus/Core/Data/LootTable.json.
+
+submarine.girin.dev — FFXIV Submarine Info
+  Per-sector airship loot tier lists, baked into the same file. No public
+  airship drop-rate data exists, so those entries record only which items a
+  sector can produce.
+
 FINAL FANTASY XIV © SQUARE ENIX CO., LTD. Game data (sector, part and rank
 tables) is read from the game client at runtime via Lumina.
