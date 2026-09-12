@@ -433,6 +433,7 @@ internal static class PlannerSection
         {
             var r = planner.Results[i];
             var chosen = i == planner.Chosen;
+            using var rowScope = ImRaii.PushId(i);
             var origin = Card.BeginFlat();
 
             var letters = string.Join(" → ", r.Sectors.Select(id => data.Sector(vessel.Type, id).Letter));

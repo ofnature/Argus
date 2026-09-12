@@ -8,6 +8,7 @@ using Argus.Core.Model;
 using Argus.Windows.Components;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Utility;
+using Dalamud.Interface.Utility.Raii;
 
 namespace Argus.Windows.Sections;
 
@@ -84,7 +85,7 @@ internal static class BuilderSection
         {
             Styling.VSpace(4f);
             Styling.SectionLabel("Current build");
-            DrawBuildRow(plugin, vessel, current, route, useAverage, null, unlock?.VisitSector, false);
+            DrawBuildRow(plugin, vessel, current, route, useAverage, null, unlock?.VisitSector, false, rowId: "current");
         }
 
         var sig = $"{vessel.Type}|{targetRank}|{planner.Map}|{string.Join(",", route)}|{prefs.Goal}|{useAverage}|{unlock?.VisitSector}";
@@ -113,19 +114,22 @@ internal static class BuilderSection
 
         if (unlock != null)
         {
-            foreach (var c in unlockResults)
-                DrawBuildRow(plugin, vessel, c.Build, route, useAverage, null, unlock.VisitSector, true, c);
+            for (var i = 0; i < unlockResults.Count; i++)
+                DrawBuildRow(plugin, vessel, unlockResults[i].Build, route, useAverage, null, unlock.VisitSector, true, unlockResults[i], $"u{i}");
         }
         else
         {
-            foreach (var c in results)
-                DrawBuildRow(plugin, vessel, c.Build, route, useAverage, c, null, true);
+            for (var i = 0; i < results.Count; i++)
+                DrawBuildRow(plugin, vessel, results[i].Build, route, useAverage, results[i], null, true, null, $"b{i}");
         }
     }
 
     private static void DrawBuildRow(Plugin plugin, Vessel vessel, Build build, uint[] route, bool useAverage,
-        PartOptimizer.Candidate? c, uint? unlockSector, bool showDiff, PartOptimizer.UnlockCandidate? u = null)
+        PartOptimizer.Candidate? c, uint? unlockSector, bool showDiff, PartOptimizer.UnlockCandidate? u = null, string rowId = "")
     {
+        // Every card draws the same labels, and ImGui keys widgets by label, so without a scope per card their
+        // buttons share one id and a click lands on whichever was drawn first.
+        using var scope = ImRaii.PushId(rowId);
         var data = plugin.Data;
         var scale = ImGuiHelpers.GlobalScale;
         var width = ImGui.GetContentRegionAvail().X;
@@ -195,10 +199,11 @@ internal static class BuilderSection
         }
 
         var ready = haveAll && parts.CanStart;
-        if (Buttons.Action($"Install {changes.Count} part{(changes.Count == 1 ? string.Empty : "s")}", ready, 160f * scale, Styling.AccentAmber)
-            && !parts.ApplyBuild(vessel, build))
+        if (Buttons.Action($"Install {changes.Count} part{(changes.Count == 1 ? string.Empty : "s")}", ready, 160f * scale, Styling.AccentAmber))
         {
-            Service.Log.Information("Argus: install refused: {Reason}", parts.LastError ?? parts.LastResult ?? "unknown");
+            Service.Log.Information("Argus: install pressed for {Build}, {Count} parts", build.Identifier, changes.Count);
+            if (!parts.ApplyBuild(vessel, build))
+                Service.Log.Information("Argus: install refused: {Reason}", parts.LastError ?? parts.LastResult ?? "unknown");
         }
 
         if (!haveAll)
