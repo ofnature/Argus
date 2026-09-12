@@ -4,11 +4,11 @@ using System.Linq;
 using Argus.Core.Data;
 using Argus.Core.Model;
 using ECommons.Automation;
+using ECommons.UIHelpers;
 using ECommons.UIHelpers.AddonMasterImplementations;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using ValueType = FFXIVClientStructs.FFXIV.Component.GUI.AtkValueType;
 
 namespace Argus.Core.Game;
 
@@ -131,6 +131,58 @@ internal sealed unsafe class PartsInterop
     }
 
     public bool IsPickerOpen => Picker() != null;
+
+    /// <summary>
+    /// The part names the open list is offering, in the game's order. Entry text is an SeString and can carry item
+    /// link payloads, so it is extracted rather than read raw.
+    /// </summary>
+    public List<string> PickerEntries()
+    {
+        var entries = new List<string>();
+        var picker = Picker();
+        if (picker == null)
+            return entries;
+
+        var reader = new PickerReader(&picker->AtkUnitBase);
+        var count = reader.Count;
+        for (var i = 0; i < count; i++)
+            entries.Add(reader.Entry(i));
+
+        return entries;
+    }
+
+    /// <summary>AtkValue layout of the part list: the count at 4, then a name every eight values from 13.</summary>
+    private sealed class PickerReader(AtkUnitBase* unitBase, int beginOffset = 0) : AtkReader(unitBase, beginOffset)
+    {
+        public uint Count => ReadUInt(4) ?? 0;
+
+        public string Entry(int index) => (ReadSeString(13 + (8 * index))?.TextValue ?? string.Empty).Trim();
+    }
+
+    /// <summary>Letters and digits only: the list can add quality marks and spacing the item name does not have.</summary>
+    private static string Normalise(string text)
+        => new(text.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
+
+    private static int IndexOfPart(List<string> entries, string itemName)
+    {
+        var wanted = Normalise(itemName);
+        if (wanted.Length == 0)
+            return -1;
+
+        for (var i = 0; i < entries.Count; i++)
+        {
+            if (Normalise(entries[i]) == wanted)
+                return i;
+        }
+
+        for (var i = 0; i < entries.Count; i++)
+        {
+            if (Normalise(entries[i]).Contains(wanted))
+                return i;
+        }
+
+        return -1;
+    }
 
     /// <summary>DEBUG helper: ask the parts window for one slot's list, to check the callback in isolation.</summary>
     public bool RequestSlot(int slot)
@@ -347,29 +399,26 @@ internal sealed unsafe class PartsInterop
                     return;
                 }
 
-                var count = picker->AtkValues[4];
-                if (count.Type != ValueType.UInt)
+                var entries = PickerEntries();
+                if (entries.Count == 0)
                     return;
 
                 var wanted = pending.Peek();
-                for (var i = 0; i < count.UInt; i++)
+                var index = IndexOfPart(entries, wanted.ItemName);
+                if (index < 0)
                 {
-                    var value = picker->AtkValues[13 + (8 * i)];
-                    if (value.Type is not (ValueType.String or ValueType.ManagedString))
-                        continue;
-                    if (!string.Equals(value.GetValueAsString(), wanted.ItemName, StringComparison.OrdinalIgnoreCase))
-                        continue;
-
-                    Callback.Fire(&picker->AtkUnitBase, true, Callback.ZeroAtkValue, i, wanted.ItemId, Callback.ZeroAtkValue, Callback.ZeroAtkValue);
-                    Service.Log.Information("Argus: installing {Item} in slot {Slot}", wanted.ItemName, wanted.Slot);
-                    pending.Dequeue();
-                    installed++;
-                    Advance(Stage.AfterPick, nowUtc);
+                    var offered = string.Join(", ", entries.Where(e => e.Length > 0));
+                    LastError = $"Slot {wanted.Slot} does not list {wanted.ItemName}. It offered: {offered}";
+                    Service.Log.Warning("Argus: {Error}", LastError);
+                    Cancel();
                     return;
                 }
 
-                LastError = $"{wanted.ItemName} was not offered for slot {wanted.Slot}; is that the vessel parts window?";
-                Cancel();
+                Callback.Fire(&picker->AtkUnitBase, true, Callback.ZeroAtkValue, index, wanted.ItemId, Callback.ZeroAtkValue, Callback.ZeroAtkValue);
+                Service.Log.Information("Argus: installing {Item} in slot {Slot} (entry {Index})", wanted.ItemName, wanted.Slot, index);
+                pending.Dequeue();
+                installed++;
+                Advance(Stage.AfterPick, nowUtc);
                 return;
             }
 

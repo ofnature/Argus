@@ -86,6 +86,8 @@ internal static unsafe class DebugSection
             }
 
             Styling.TextWrapped($"picker open = {parts.IsPickerOpen}. Press a slot: the game should open its part list.", Styling.TextMuted);
+            foreach (var (entry, i) in parts.PickerEntries().Select((e, i) => (e, i)))
+                Styling.Text($"  ({i}) {entry}", Styling.TextDim);
         }
 
         var entries = parts.MenuEntries();
