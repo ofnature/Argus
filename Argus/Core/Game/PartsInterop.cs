@@ -79,6 +79,9 @@ internal sealed unsafe class PartsInterop
 
     public string? LastResult { get; private set; }
 
+    /// <summary>Caller-supplied tag of whatever started the last run, so a UI can show the outcome only where it was asked for.</summary>
+    public string LastRunId { get; private set; } = string.Empty;
+
     public bool Running => stage != Stage.None;
 
     /// <summary>Where a run has got to, for the Debug page.</summary>
@@ -229,10 +232,11 @@ internal sealed unsafe class PartsInterop
     /// Queue the slots that differ. Returns false with <see cref="LastError"/> when the screen is not in the right
     /// place, a part has no known item, or one is not in the inventory.
     /// </summary>
-    public bool ApplyBuild(Vessel vessel, Build target)
+    public bool ApplyBuild(Vessel vessel, Build target, string runId = "")
     {
         LastError = null;
         LastResult = null;
+        LastRunId = runId;
         Cancel();
 
         var changes = Differences(vessel, target);

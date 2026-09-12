@@ -71,14 +71,6 @@ internal static class BuilderSection
         targetRank = Math.Clamp(targetRank, 1, data.LastRank(vessel.Type));
         Styling.Tooltip("Parts unlock by rank and capacity grows with it; plan ahead for the rank you are levelling towards.");
 
-        var parts = plugin.PartsInterop;
-        if (parts.Running)
-            Styling.Text("Installing parts…", Styling.PulseColor(Styling.AccentAmber, Styling.AccentAmberSoft));
-        else if (parts.LastError != null)
-            Styling.TextWrapped(parts.LastError, Styling.AccentRose);
-        else if (parts.LastResult != null)
-            Styling.TextWrapped(parts.LastResult, Styling.AccentMint);
-
         Build? current = null;
         try { current = Build.From(data, vessel); } catch (KeyNotFoundException) { }
         if (current != null)
@@ -165,7 +157,7 @@ internal static class BuilderSection
         }
 
         if (showDiff)
-            DrawInstall(plugin, vessel, build, width);
+            DrawInstall(plugin, vessel, build, width, rowId);
 
         Card.EndFlat(origin, width, Styling.CardBgSoft, fits && build.FitsCapacity ? null : Styling.AccentRose);
         Styling.VSpace(3f);
@@ -175,7 +167,7 @@ internal static class BuilderSection
     /// What this build would cost in parts and a button to install it. Parts are consumed from the inventory, so the
     /// carried count is shown per slot and the button stays disabled unless every part is actually in the bags.
     /// </summary>
-    private static void DrawInstall(Plugin plugin, Vessel vessel, Build build, float width)
+    private static void DrawInstall(Plugin plugin, Vessel vessel, Build build, float width, string rowId)
     {
         var scale = ImGuiHelpers.GlobalScale;
         var parts = plugin.PartsInterop;
@@ -202,7 +194,7 @@ internal static class BuilderSection
         if (Buttons.Action($"Install {changes.Count} part{(changes.Count == 1 ? string.Empty : "s")}", ready, 160f * scale, Styling.AccentAmber))
         {
             Service.Log.Information("Argus: install pressed for {Build}, {Count} parts", build.Identifier, changes.Count);
-            if (!parts.ApplyBuild(vessel, build))
+            if (!parts.ApplyBuild(vessel, build, rowId))
                 Service.Log.Information("Argus: install refused: {Reason}", parts.LastError ?? parts.LastResult ?? "unknown");
         }
 
@@ -217,7 +209,10 @@ internal static class BuilderSection
             Styling.Text(blocker, Styling.TextMuted);
         }
 
-        // The page-level status is far above a scrolled-down card, so repeat the outcome next to the button.
+        // Only the card that asked: the interop's state is global, and every card would otherwise claim the result.
+        if (parts.LastRunId != rowId)
+            return;
+
         if (parts.Running)
             Styling.Text($"Installing… {parts.Installed} done, {parts.Remaining} to go ({parts.StageName})", Styling.PulseColor(Styling.AccentAmber, Styling.AccentAmberSoft));
         else if (parts.LastError != null)
