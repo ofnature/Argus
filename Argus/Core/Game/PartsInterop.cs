@@ -73,6 +73,37 @@ internal sealed unsafe class PartsInterop
 
     public bool Running => stage != Stage.None;
 
+    /// <summary>Where a run has got to, for the Debug page.</summary>
+    public string StageName => stage.ToString();
+
+    public int Remaining => pending.Count;
+
+    public int Installed => installed;
+
+    /// <summary>Why <see cref="CanStart"/> is false, or null when a run could begin.</summary>
+    public string? Blocker
+    {
+        get
+        {
+            if (Running)
+                return "already running";
+            if (IsPartsWindowOpen)
+                return null;
+            if (!IsMenuOpen)
+                return "open the vessel on the Voyage Control Panel";
+            return FindChangeEntry() >= 0 ? null : "that menu has no change-components entry";
+        }
+    }
+
+    /// <summary>The entries Argus can see on the open menu, for the Debug page.</summary>
+    public List<string> MenuEntries()
+    {
+        var addon = Addon(MenuAddon);
+        if (addon == null)
+            return [];
+        return new AddonMaster.SelectString(addon).Entries.Select(e => e.Text).ToList();
+    }
+
     private static AtkUnitBase* Addon(string name)
     {
         var ptr = Service.GameGui.GetAddonByName(name).Address;
@@ -145,9 +176,9 @@ internal sealed unsafe class PartsInterop
             }
         }
 
-        if (!IsPartsWindowOpen && !(IsMenuOpen && FindChangeEntry() >= 0))
+        if (Blocker is { } blocker)
         {
-            LastError = "Open the vessel on the Voyage Control Panel first.";
+            LastError = $"Cannot start: {blocker}.";
             return false;
         }
 
@@ -297,7 +328,7 @@ internal sealed unsafe class PartsInterop
                     return;
                 }
 
-                LastError = $"{wanted.ItemName} was not offered for that slot.";
+                LastError = $"{wanted.ItemName} was not offered for slot {wanted.Slot}; is that the vessel parts window?";
                 Cancel();
                 return;
             }

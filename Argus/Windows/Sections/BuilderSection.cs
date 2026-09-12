@@ -206,10 +206,18 @@ internal static class BuilderSection
             ImGui.SameLine();
             Styling.Text("craft or withdraw the missing parts first", Styling.TextMuted);
         }
-        else if (!parts.CanStart && !parts.Running)
+        else if (parts.Blocker is { } blocker)
         {
             ImGui.SameLine();
-            Styling.Text("open the vessel on the Voyage Control Panel", Styling.TextMuted);
+            Styling.Text(blocker, Styling.TextMuted);
         }
+
+        // The page-level status is far above a scrolled-down card, so repeat the outcome next to the button.
+        if (parts.Running)
+            Styling.Text($"Installing… {parts.Installed} done, {parts.Remaining} to go ({parts.StageName})", Styling.PulseColor(Styling.AccentAmber, Styling.AccentAmberSoft));
+        else if (parts.LastError != null)
+            Styling.TextWrapped(parts.LastError, Styling.AccentRose);
+        else if (parts.LastResult != null)
+            Styling.TextWrapped(parts.LastResult, Styling.AccentMint);
     }
 }

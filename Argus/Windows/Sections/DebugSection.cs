@@ -63,6 +63,25 @@ internal static unsafe class DebugSection
         }
 
         Styling.VSpace(8f);
+        Styling.SectionLabel("Parts");
+        var parts = plugin.PartsInterop;
+        Styling.Text($"menu open = {parts.IsMenuOpen} · parts window open = {parts.IsPartsWindowOpen} · can start = {parts.CanStart} · stage {parts.StageName} ({parts.Installed} done, {parts.Remaining} left)",
+            parts.CanStart || parts.Running ? Styling.TextSecondary : Styling.AccentRose);
+        if (parts.Blocker is { } partsBlocker)
+            Styling.Text($"blocked: {partsBlocker}", Styling.AccentRose);
+        if (parts.LastError != null)
+            Styling.TextWrapped($"last error: {parts.LastError}", Styling.AccentRose);
+        if (parts.LastResult != null)
+            Styling.TextWrapped($"last result: {parts.LastResult}", Styling.AccentMint);
+
+        var entries = parts.MenuEntries();
+        if (entries.Count == 0)
+            Styling.Text("No SelectString menu open.", Styling.TextMuted);
+        else
+            foreach (var (entry, i) in entries.Select((e, i) => (e, i)))
+                Styling.Text($"  [{i}] {entry}", Styling.TextDim);
+
+        Styling.VSpace(8f);
         Styling.SectionLabel("Planner addon");
         var interop = plugin.PlannerInterop;
         if (!interop.IsPlannerOpen)
