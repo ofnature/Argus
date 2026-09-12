@@ -48,6 +48,57 @@ public static class ItemYield
     public static double PerVoyage(VesselType type, IEnumerable<uint> sectors, uint itemId, int surveillance, int retrieval)
         => sectors.Sum(s => PerVisit(type, s, itemId, surveillance, retrieval));
 
+    /// <summary>A surveillance range that puts a sector on the loot tier which lists an item.</summary>
+    public sealed record Window(uint Sector, int Tier, int Min, int Max)
+    {
+        public bool Unbounded => Max == int.MaxValue;
+
+        public bool Contains(int surveillance) => surveillance >= Min && surveillance <= Max;
+
+        /// <summary>"under 130", "130-149", "150+".</summary>
+        public string Describe()
+            => Min <= 0 && Unbounded ? "any"
+                : Unbounded ? $"{Min}+"
+                : Min <= 0 ? $"under {Max + 1}"
+                : $"{Min}-{Max}";
+    }
+
+    /// <summary>
+    /// The surveillance range a tier occupies at a sector. Surveillance promotes a sector to a richer pool rather
+    /// than adding to it, so each tier is a band rather than a floor, and the lower tiers have an upper bound.
+    /// </summary>
+    private static (int Min, int Max)? BandFor(ExpModel.Thresholds t, int tier)
+    {
+        if (tier == 2)
+            return t.T3 > 0 ? (t.T3, int.MaxValue) : null;
+        if (tier == 1)
+            return t.T2 > 0 ? (t.T2, t.T3 > 0 ? t.T3 - 1 : int.MaxValue) : null;
+        return (0, t.T2 > 0 ? t.T2 - 1 : int.MaxValue);
+    }
+
+    /// <summary>Every sector and surveillance range on this map that can produce the item, richest tier first.</summary>
+    public static List<Window> Windows(GameData data, VesselType type, uint map, uint itemId)
+    {
+        var windows = new List<Window>();
+        foreach (var sector in data.DestinationsOf(type, map))
+        {
+            var thresholds = ExpModel.ThresholdsFor(type, sector.Id);
+            if (!thresholds.Known)
+                continue;
+
+            for (var tier = 0; tier < 3; tier++)
+            {
+                if (LootTable.Drops(type, sector.Id, tier).All(d => d.ItemId != itemId))
+                    continue;
+                if (BandFor(thresholds, tier) is not { } band)
+                    continue;
+                windows.Add(new Window(sector.Id, tier, band.Min, band.Max));
+            }
+        }
+
+        return windows.OrderByDescending(w => w.Tier).ThenBy(w => w.Sector).ToList();
+    }
+
     public sealed record SectorSource(uint Sector, int Tier, double PerVisit, int Min, int Max);
 
     /// <summary>

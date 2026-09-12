@@ -22,6 +22,7 @@ internal static class BuilderSection
     private static string signature = string.Empty;
     private static List<PartOptimizer.Candidate> results = new();
     private static List<PartOptimizer.UnlockCandidate> unlockResults = new();
+    private static List<PartOptimizer.ItemCandidate> itemResults = new();
     private static int targetRank;
 
     public static void Draw(Plugin plugin)
@@ -49,6 +50,7 @@ internal static class BuilderSection
         var prefs = plugin.Config.PlannerFor(vessel.Type);
         var useAverage = prefs.AverageBonus || vessel.Type == VesselType.Airship;
         var unlock = prefs.UnlockFocus && planner.AutoStep is { } step ? step : null;
+        var farmItem = unlock == null ? prefs.FarmItem : 0;
         if (targetRank == 0 || signature.Length == 0)
             targetRank = vessel.Rank;
 
@@ -60,6 +62,13 @@ internal static class BuilderSection
             ImGui.SameLine(0, 0);
             Pill.Draw("UNLOCK FOCUS", Styling.AccentTeal, 0.72f);
             Styling.Text($"Ranked for discovering the next sector at {target.Letter}. {target.Name}: surveillance tier reached there, favor above its line (double-dip = a second roll), then surveys per day.", Styling.TextDim);
+        }
+        else if (farmItem != 0)
+        {
+            Styling.Text($"{vessel.Name} · route {routeText} · ", Styling.TextSecondary);
+            ImGui.SameLine(0, 0);
+            Pill.Draw("FARM", Styling.AccentMint, 0.72f);
+            Styling.TextWrapped($"Ranked for {Sheets.ItemName(farmItem)} per day. Surveillance decides which loot pool each sector rolls on, so the best build is the one inside the band that lists it, not the highest surveillance.", Styling.TextDim);
         }
         else
         {
@@ -80,27 +89,29 @@ internal static class BuilderSection
             DrawBuildRow(plugin, vessel, current, route, useAverage, null, unlock?.VisitSector, false, rowId: "current");
         }
 
-        var sig = $"{vessel.Type}|{targetRank}|{planner.Map}|{string.Join(",", route)}|{prefs.Goal}|{useAverage}|{unlock?.VisitSector}";
+        var sig = $"{vessel.Type}|{targetRank}|{planner.Map}|{string.Join(",", route)}|{prefs.Goal}|{useAverage}|{unlock?.VisitSector}|{farmItem}";
         if (sig != signature)
         {
             signature = sig;
+            results = new List<PartOptimizer.Candidate>();
+            unlockResults = new List<PartOptimizer.UnlockCandidate>();
+            itemResults = new List<PartOptimizer.ItemCandidate>();
+
             if (unlock != null)
-            {
                 unlockResults = PartOptimizer.BestForUnlock(data, vessel.Type, targetRank, planner.Map, route, unlock.VisitSector, 10);
-                results = new List<PartOptimizer.Candidate>();
-            }
+            else if (farmItem != 0)
+                itemResults = PartOptimizer.BestForItem(data, vessel.Type, targetRank, planner.Map, route, farmItem, 10);
             else
-            {
                 results = PartOptimizer.Best(data, vessel.Type, targetRank, planner.Map, route, prefs.Goal, useAverage, 10);
-                unlockResults = new List<PartOptimizer.UnlockCandidate>();
-            }
         }
 
         Styling.VSpace(6f);
-        Styling.SectionLabel(unlock != null ? "Unlock builds" : "Suggested builds");
-        if (results.Count == 0 && unlockResults.Count == 0)
+        Styling.SectionLabel(unlock != null ? "Unlock builds" : farmItem != 0 ? $"Builds for {Sheets.ItemName(farmItem)}" : "Suggested builds");
+        if (results.Count == 0 && unlockResults.Count == 0 && itemResults.Count == 0)
         {
-            Styling.Text("No part set at this rank reaches the route within capacity. Try a shorter route or a higher rank.", Styling.TextMuted);
+            Styling.TextWrapped(farmItem != 0
+                ? "No build at this rank can get that item on this route: no sector on it lists the item at any surveillance tier. Add a sector that carries it in the Planner."
+                : "No part set at this rank reaches the route within capacity. Try a shorter route or a higher rank.", Styling.TextMuted);
             return;
         }
 
@@ -108,6 +119,17 @@ internal static class BuilderSection
         {
             for (var i = 0; i < unlockResults.Count; i++)
                 DrawBuildRow(plugin, vessel, unlockResults[i].Build, route, useAverage, null, unlock.VisitSector, true, unlockResults[i], $"u{i}");
+        }
+        else if (farmItem != 0)
+        {
+            var itemName = Sheets.ItemName(farmItem);
+            for (var i = 0; i < itemResults.Count; i++)
+            {
+                var c = itemResults[i];
+                DrawBuildRow(plugin, vessel, c.Build, route, useAverage, null, null, true, null, $"f{i}",
+                    $"{itemName}: ≈{c.Units:0.##} per voyage · {c.UnitsPerDay:0.##} per day",
+                    i == 0 ? "BEST FOR THIS ITEM" : null);
+            }
         }
         else
         {
@@ -117,7 +139,8 @@ internal static class BuilderSection
     }
 
     private static void DrawBuildRow(Plugin plugin, Vessel vessel, Build build, uint[] route, bool useAverage,
-        PartOptimizer.Candidate? c, uint? unlockSector, bool showDiff, PartOptimizer.UnlockCandidate? u = null, string rowId = "")
+        PartOptimizer.Candidate? c, uint? unlockSector, bool showDiff, PartOptimizer.UnlockCandidate? u = null, string rowId = "",
+        string? yieldLine = null, string? badge = null)
     {
         // Every card draws the same labels, and ImGui keys widgets by label, so without a scope per card their
         // buttons share one id and a click lands on whichever was drawn first.
@@ -136,6 +159,12 @@ internal static class BuilderSection
         var fits = distance <= build.Range;
 
         Styling.TextScaled(build.Identifier, Styling.TextStrong, 1.15f);
+        if (badge != null)
+        {
+            ImGui.SameLine();
+            Pill.Draw(badge, Styling.AccentMint, 0.7f);
+        }
+
         ImGui.SameLine();
         var partNames = string.Join(" · ", build.Parts.Select((p, i) => $"{Build.SlotName(vessel.Type, i)}: {(vessel.Type == VesselType.Submarine ? Build.SubmarineClassName(p.Id) : Build.AirshipClassName(p.Class))}"));
         Styling.Text(partNames, Styling.TextDim);
@@ -144,6 +173,9 @@ internal static class BuilderSection
             build.FitsCapacity ? Styling.TextSecondary : Styling.AccentRose);
         Styling.Text($"{Formatting.VoyageLength(duration)} · {distance}/{build.Range} range · {Formatting.Number(used)} EXP ({Formatting.Number(exp.Guaranteed)}–{Formatting.Number(exp.Maximum)}) · {Formatting.Number((long)(duration.TotalHours > 0 ? used / duration.TotalHours : 0))}/h",
             fits ? Styling.TextSecondary : Styling.AccentRose);
+
+        if (yieldLine != null)
+            Styling.Text(yieldLine, Styling.AccentMint);
 
         if (unlockSector is { } target)
         {

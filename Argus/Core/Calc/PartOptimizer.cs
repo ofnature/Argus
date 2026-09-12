@@ -85,6 +85,49 @@ public static class PartOptimizer
             .ToList();
     }
 
+    /// <summary>A build ranked for how much of one item it brings back.</summary>
+    public sealed record ItemCandidate(Build Build, int Distance, TimeSpan Duration, double Units, RouteExp Exp)
+    {
+        public double UnitsPerDay => Duration.TotalHours <= 0 ? 0 : Units * 24.0 / Duration.TotalHours;
+    }
+
+    /// <summary>
+    /// Builds ranked by how much of <paramref name="itemId"/> the route yields. Surveillance decides which loot pool
+    /// each sector rolls on, so this naturally lands on a build inside the band that lists the item rather than simply
+    /// the highest surveillance; a route with no sector that can ever supply it comes back empty.
+    /// </summary>
+    public static List<ItemCandidate> BestForItem(GameData data, VesselType type, int rank, uint map, IReadOnlyList<uint> route,
+        uint itemId, int count = 10, IReadOnlySet<uint>? allowedParts = null)
+    {
+        var sectors = route.Select(id => data.Sector(type, id)).ToList();
+        if (sectors.Count == 0)
+            return new List<ItemCandidate>();
+
+        var start = data.StartFor(type, map);
+        var distance = VoyageMath.RouteDistance(start, sectors);
+
+        var results = new List<ItemCandidate>();
+        foreach (var build in AllBuilds(data, type, rank, allowedParts))
+        {
+            if (distance > build.Range)
+                continue;
+
+            var units = ItemYield.PerVoyage(type, route, itemId, build.Surveillance, build.Retrieval);
+            if (units <= 0)
+                continue;
+
+            var duration = VoyageMath.RouteDuration(start, sectors, build.Speed);
+            results.Add(new ItemCandidate(build, distance, duration, units, ExpModel.Route(build, sectors)));
+        }
+
+        return results
+            .OrderByDescending(c => c.UnitsPerDay)
+            .ThenByDescending(c => c.Units)
+            .ThenBy(c => c.Build.Cost)
+            .Take(count)
+            .ToList();
+    }
+
     /// <summary>Surveillance tier a build reaches at a sector: 2 = tier 3 pool, 1 = tier 2 pool, 0 = base.</summary>
     public static int SurveillanceTier(ExpModel.Thresholds t, int surveillance)
     {

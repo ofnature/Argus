@@ -236,6 +236,12 @@ internal static class PlannerSection
         if (build == null)
             return changed;
 
+        // The surveillance band each tier occupies, so the number to build toward is visible either way.
+        var windows = ItemYield.Windows(data, vessel.Type, planner.Map, prefs.FarmItem);
+        var windowText = string.Join(" · ", windows
+            .GroupBy(w => w.Sector)
+            .Select(g => $"{data.Sector(vessel.Type, g.Key).Letter} {string.Join(" or ", g.Select(w => w.Describe()))}"));
+
         var sources = ItemYield.Sources(data, vessel.Type, planner.Map, prefs.FarmItem, build.Surveillance, build.Retrieval);
         if (sources.Count == 0)
         {
@@ -247,8 +253,12 @@ internal static class PlannerSection
             });
 
             Styling.TextWrapped(atLowerTier
-                ? "This build's surveillance is too high for that item here: it only appears in the lower loot tiers, and the sectors that carry it now roll on a richer pool. A lower surveillance build would reach it."
+                ? $"This build's surveillance ({build.Surveillance}) is too high for that item here: it only appears in the lower loot tiers, and the sectors that carry it now roll on a richer pool."
                 : "No sector on this map produces that item at the surveillance tier this build reaches.", Styling.AccentRose);
+
+            if (windowText.Length > 0)
+                Styling.TextWrapped($"Surveillance needed: {windowText}. The Builder ranks builds for it.", Styling.AccentAmberSoft);
+
             return changed;
         }
 
@@ -259,6 +269,9 @@ internal static class PlannerSection
             return rated ? $"{letter} {x.PerVisit:0.##}/visit ({x.Min}-{x.Max})" : letter;
         }));
         Styling.TextWrapped(rated ? $"Drops from: {text}" : $"Drops from: {text} (airship rates are unknown; sources only)", Styling.AccentTealSoft);
+        if (windowText.Length > 0)
+            Styling.TextWrapped($"Surveillance needed: {windowText} (this build {build.Surveillance})", Styling.TextDim);
+
         return changed;
     }
 
