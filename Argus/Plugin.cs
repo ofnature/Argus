@@ -28,6 +28,7 @@ public sealed class Plugin : IDalamudPlugin
     internal FleetService Fleet { get; }
     internal PlannerService Planner { get; }
     internal PlannerInterop PlannerInterop { get; }
+    internal PartsInterop PartsInterop { get; }
     internal LootStore Loot { get; }
     internal MainWindow MainWindow { get; }
 
@@ -35,6 +36,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly PlannerOverlay plannerOverlay;
     private readonly DtrStatus dtr;
     private readonly LootHook lootHook;
+    private readonly ArgusIpc ipc;
 
     public Plugin(IDalamudPluginInterface pluginInterface)
     {
@@ -51,6 +53,7 @@ public sealed class Plugin : IDalamudPlugin
 
         Planner = new PlannerService(this);
         PlannerInterop = new PlannerInterop();
+        PartsInterop = new PartsInterop();
         Loot = new LootStore(Service.PluginInterface.GetPluginConfigDirectory());
         lootHook = new LootHook(this, Loot);
         lootHook.Recorded += OnLootRecorded;
@@ -61,6 +64,7 @@ public sealed class Plugin : IDalamudPlugin
         windowSystem.AddWindow(plannerOverlay);
 
         dtr = new DtrStatus(Fleet, Config, () => MainWindow.IsOpen = true);
+        ipc = new ArgusIpc(this);
 
         Fleet.WorkshopEntered += OnWorkshopEntered;
 
@@ -84,6 +88,7 @@ public sealed class Plugin : IDalamudPlugin
         var now = DateTime.UtcNow;
         Fleet.Update(now);
         PlannerInterop.Update(now);
+        PartsInterop.Update(now);
         dtr.Update(now);
     }
 
@@ -125,6 +130,7 @@ public sealed class Plugin : IDalamudPlugin
         Service.CommandManager.RemoveHandler(CommandName);
         Service.CommandManager.RemoveHandler(CommandAlias);
 
+        ipc.Dispose();
         lootHook.Recorded -= OnLootRecorded;
         lootHook.Dispose();
         Loot.SaveIfDirty();

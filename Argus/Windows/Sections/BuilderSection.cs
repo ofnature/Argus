@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Argus.Core;
 using Argus.Core.Calc;
+using Argus.Core.Game;
 using Argus.Core.Model;
 using Argus.Windows.Components;
 using Dalamud.Bindings.ImGui;
@@ -67,6 +69,14 @@ internal static class BuilderSection
         ImGui.InputInt("Build for rank", ref targetRank);
         targetRank = Math.Clamp(targetRank, 1, data.LastRank(vessel.Type));
         Styling.Tooltip("Parts unlock by rank and capacity grows with it; plan ahead for the rank you are levelling towards.");
+
+        var parts = plugin.PartsInterop;
+        if (parts.Running)
+            Styling.Text("Installing parts…", Styling.PulseColor(Styling.AccentAmber, Styling.AccentAmberSoft));
+        else if (parts.LastError != null)
+            Styling.TextWrapped(parts.LastError, Styling.AccentRose);
+        else if (parts.LastResult != null)
+            Styling.TextWrapped(parts.LastResult, Styling.AccentMint);
 
         Build? current = null;
         try { current = Build.From(data, vessel); } catch (KeyNotFoundException) { }
@@ -151,27 +161,55 @@ internal static class BuilderSection
         }
 
         if (showDiff)
-        {
-            Build? current = null;
-            try { current = Build.From(data, vessel); } catch (KeyNotFoundException) { }
-            if (current != null)
-            {
-                var swaps = new List<string>();
-                var cur = current.Parts.ToList();
-                var next = build.Parts.ToList();
-                for (var i = 0; i < 4; i++)
-                {
-                    if (cur[i].Id == next[i].Id)
-                        continue;
-                    var name = vessel.Type == VesselType.Submarine ? Build.SubmarineClassName(next[i].Id) : Build.AirshipClassName(next[i].Class);
-                    swaps.Add($"{Build.SlotName(vessel.Type, i)} → {name}");
-                }
-
-                Styling.Text(swaps.Count == 0 ? "This is the current build." : "Swap: " + string.Join(", ", swaps), swaps.Count == 0 ? Styling.AccentMint : Styling.AccentTealSoft);
-            }
-        }
+            DrawInstall(plugin, vessel, build, width);
 
         Card.EndFlat(origin, width, Styling.CardBgSoft, fits && build.FitsCapacity ? null : Styling.AccentRose);
         Styling.VSpace(3f);
+    }
+
+    /// <summary>
+    /// What this build would cost in parts and a button to install it. Parts are consumed from the inventory, so the
+    /// carried count is shown per slot and the button stays disabled unless every part is actually in the bags.
+    /// </summary>
+    private static void DrawInstall(Plugin plugin, Vessel vessel, Build build, float width)
+    {
+        var scale = ImGuiHelpers.GlobalScale;
+        var parts = plugin.PartsInterop;
+        var changes = PartsInterop.Differences(vessel, build);
+
+        if (changes.Count == 0)
+        {
+            Styling.Text("This is the current build.", Styling.AccentMint);
+            return;
+        }
+
+        var haveAll = true;
+        foreach (var (slot, row, item) in changes)
+        {
+            var name = item == 0 ? "unknown part" : Sheets.ItemName(item);
+            var carried = item == 0 ? 0 : PartsInterop.Carried(item);
+            haveAll &= carried > 0;
+            Styling.Text($"{Build.SlotName(vessel.Type, slot)} → {name}", Styling.AccentTealSoft);
+            ImGui.SameLine();
+            Styling.Text(carried > 0 ? $"(carrying {carried})" : "(none carried)", carried > 0 ? Styling.TextDim : Styling.AccentRose);
+        }
+
+        var ready = haveAll && parts.CanStart;
+        if (Buttons.Action($"Install {changes.Count} part{(changes.Count == 1 ? string.Empty : "s")}", ready, 160f * scale, Styling.AccentAmber)
+            && !parts.ApplyBuild(vessel, build))
+        {
+            Service.Log.Information("Argus: install refused: {Reason}", parts.LastError ?? parts.LastResult ?? "unknown");
+        }
+
+        if (!haveAll)
+        {
+            ImGui.SameLine();
+            Styling.Text("craft or withdraw the missing parts first", Styling.TextMuted);
+        }
+        else if (!parts.CanStart && !parts.Running)
+        {
+            ImGui.SameLine();
+            Styling.Text("open the vessel on the Voyage Control Panel", Styling.TextMuted);
+        }
     }
 }
