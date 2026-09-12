@@ -4,6 +4,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using Argus.Core.Model;
 using ECommons.UIHelpers;
+using ECommons.UIHelpers.AddonMasterImplementations;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
@@ -13,7 +14,11 @@ namespace Argus.Core.Game;
 /// <summary>
 /// Talks to the in-game voyage planner. Both vessel types use the <c>AirShipExploration</c> addon; submarines add a
 /// map select step before it. Selecting a destination dispatches the addon's own event (AtkEventType 35 with an
-/// index payload), the technique AutoRetainer uses — it only toggles a row, never deploys.
+/// index payload), the technique AutoRetainer uses.
+///
+/// <para>Selecting sectors never dispatches anything by itself. Deploying only happens when the player ticks the
+/// overlay's deploy box and then presses Apply: the planner's Deploy opens a detail window, and confirming there is
+/// what actually sends the vessel, so both clicks are driven here in sequence.</para>
 /// </summary>
 internal sealed unsafe class PlannerInterop
 {
@@ -22,12 +27,34 @@ internal sealed unsafe class PlannerInterop
 
     private static readonly TimeSpan SelectInterval = TimeSpan.FromMilliseconds(180);
 
+    /// <summary>How long to wait for the game to open and accept the deploy windows before giving up.</summary>
+    private static readonly TimeSpan DeployTimeout = TimeSpan.FromSeconds(8);
+
+    private enum DeployStage
+    {
+        None,
+
+        /// <summary>Press Deploy on the planner, which opens the detail window.</summary>
+        OpenDetail,
+
+        /// <summary>Confirm in the detail window, which is what actually sends the vessel.</summary>
+        Confirm,
+    }
+
     private readonly Queue<int> pending = new();
     private DateTime lastSelectUtc = DateTime.MinValue;
 
+    private bool deployWhenApplied;
+    private DeployStage deployStage;
+    private DateTime deployStageSince;
+    private bool confirmClicked;
+
     public string? LastError { get; private set; }
 
-    public bool Applying => pending.Count > 0;
+    public bool Applying => pending.Count > 0 || deployStage != DeployStage.None;
+
+    /// <summary>True while the queued route will be dispatched once every sector is selected.</summary>
+    public bool Deploying => deployStage != DeployStage.None;
 
     /// <summary>One row of the planner's destination list.</summary>
     public sealed record Destination(int Index, string NameFull, string NameShort, uint RequiredRank, uint StatusFlag)
@@ -136,9 +163,10 @@ internal sealed unsafe class PlannerInterop
     /// Queue the route's sectors for selection. Returns false (with <see cref="LastError"/>) when the planner is not
     /// open, already has a selection, or a sector cannot be matched to a row.
     /// </summary>
-    public bool ApplyRoute(GameData data, VesselType type, IReadOnlyList<uint> sectors)
+    public bool ApplyRoute(GameData data, VesselType type, IReadOnlyList<uint> sectors, bool deployAfter = false)
     {
         LastError = null;
+        CancelDeploy();
         if (!IsPlannerOpen)
         {
             LastError = "Open the voyage planner first.";
@@ -175,6 +203,7 @@ internal sealed unsafe class PlannerInterop
         pending.Clear();
         foreach (var i in indices)
             pending.Enqueue(i);
+        deployWhenApplied = deployAfter;
         return true;
     }
 
@@ -198,7 +227,11 @@ internal sealed unsafe class PlannerInterop
     public void Update(DateTime nowUtc)
     {
         if (pending.Count == 0)
+        {
+            if (deployStage != DeployStage.None)
+                PumpDeploy(nowUtc);
             return;
+        }
 
         var addon = Addon(PlannerAddon);
         if (addon == null)
@@ -222,10 +255,97 @@ internal sealed unsafe class PlannerInterop
             Service.Log.Error(ex, "Argus: selecting planner destination {Index} failed", index);
             pending.Clear();
             LastError = "Selecting a destination failed; see the log.";
+            CancelDeploy();
+            return;
+        }
+
+        // Only arm the dispatch once every sector the player reviewed is actually selected.
+        if (pending.Count == 0 && deployWhenApplied)
+        {
+            deployWhenApplied = false;
+            deployStage = DeployStage.OpenDetail;
+            deployStageSince = nowUtc;
+            confirmClicked = false;
         }
     }
 
-    public void Cancel() => pending.Clear();
+    /// <summary>Presses Deploy on the planner, then confirms in the detail window that the game opens in response.</summary>
+    private void PumpDeploy(DateTime nowUtc)
+    {
+        if (nowUtc - deployStageSince > DeployTimeout)
+        {
+            LastError = "The game did not accept the deploy; finish it in the voyage window.";
+            CancelDeploy();
+            return;
+        }
+
+        if (nowUtc - lastSelectUtc < SelectInterval)
+            return;
+        lastSelectUtc = nowUtc;
+
+        try
+        {
+            switch (deployStage)
+            {
+                case DeployStage.OpenDetail:
+                    if (Addon(DetailAddon) != null)
+                    {
+                        deployStage = DeployStage.Confirm;
+                        deployStageSince = nowUtc;
+                        return;
+                    }
+
+                    var planner = Addon(PlannerAddon);
+                    if (planner == null)
+                    {
+                        LastError = "The planner closed before the vessel was deployed.";
+                        CancelDeploy();
+                        return;
+                    }
+
+                    // No-ops while the button is disabled, so an unaffordable route simply times out.
+                    new AddonMaster.AirShipExploration(planner).Deploy();
+                    return;
+
+                case DeployStage.Confirm:
+                    var detail = Addon(DetailAddon);
+                    if (detail == null)
+                    {
+                        // It closed after our click, which means the voyage went out.
+                        if (confirmClicked)
+                        {
+                            Service.Log.Information("Argus: voyage deployed from the overlay");
+                            CancelDeploy();
+                        }
+
+                        return;
+                    }
+
+                    new AddonMaster.AirShipExplorationDetail(detail).Deploy();
+                    confirmClicked = true;
+                    return;
+            }
+        }
+        catch (Exception ex)
+        {
+            Service.Log.Error(ex, "Argus: deploying from the overlay failed");
+            LastError = "Deploying failed; see the log.";
+            CancelDeploy();
+        }
+    }
+
+    private void CancelDeploy()
+    {
+        deployWhenApplied = false;
+        deployStage = DeployStage.None;
+        confirmClicked = false;
+    }
+
+    public void Cancel()
+    {
+        pending.Clear();
+        CancelDeploy();
+    }
 
     // Payload layout as reverse-engineered by AutoRetainer: the addon reads the row index at +16 and walks
     // ptr(+0) → ptr(+168) → int(+172) == 0x0FFFFFFF.

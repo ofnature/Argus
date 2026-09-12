@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Numerics;
+using Argus.Core;
 using Argus.Core.Calc;
 using Argus.Core.Model;
 using Argus.Windows.Components;
@@ -111,18 +112,7 @@ public sealed class PlannerOverlay : Window, IDisposable
 
         Styling.TextScaled("ARGUS", Styling.AccentTealSoft, 0.85f);
         ImGui.SameLine();
-        Styling.Text(vessel == null ? "" : $"{vessel.Name} · R{vessel.Rank}", Styling.TextStrong);
-        if (vessel != null && ExpModel.IsEstimate(vessel.Type))
-        {
-            ImGui.SameLine();
-            Pill.Draw("ESTIMATE", Styling.AccentViolet, 0.7f);
-        }
-
-        if (planner.UnlockFocusActive)
-        {
-            ImGui.SameLine();
-            Pill.Draw("UNLOCK", Styling.AccentTeal, 0.7f);
-        }
+        Styling.Text(vessel == null ? string.Empty : $"{vessel.Name} · R{vessel.Rank}", Styling.TextStrong);
 
         if (vessel == null)
         {
@@ -133,6 +123,29 @@ public sealed class PlannerOverlay : Window, IDisposable
         planner.Refresh();
         var prefs = plugin.Config.PlannerFor(vessel.Type);
         var useAverage = prefs.AverageBonus || vessel.Type == VesselType.Airship;
+
+        // Their own row: the overlay is 320px and the title line clips as soon as two badges appear.
+        var badge = false;
+        if (ExpModel.IsEstimate(vessel.Type))
+        {
+            Pill.Draw("ESTIMATE", Styling.AccentViolet, 0.7f);
+            badge = true;
+        }
+
+        if (planner.UnlockFocusActive)
+        {
+            if (badge)
+                ImGui.SameLine(0, 4f * scale);
+            Pill.Draw("UNLOCK", Styling.AccentTeal, 0.7f);
+            badge = true;
+        }
+
+        if (prefs.FarmItem != 0)
+        {
+            if (badge)
+                ImGui.SameLine(0, 4f * scale);
+            Pill.Draw("FARM", Styling.AccentMint, 0.7f);
+        }
 
         if (planner.AutoStep is { } step && prefs.ProgressionAutoInclude)
         {
@@ -160,6 +173,13 @@ public sealed class PlannerOverlay : Window, IDisposable
             var exp = route.ExpUsed(useAverage);
             Styling.Text($"{Formatting.VoyageLength(route.Duration)} · {route.Distance} range · {route.Fuel} fuel", Styling.TextSecondary);
             Styling.Text($"{Formatting.Number(exp)} EXP · {Formatting.Number((long)route.ExpPerHour(useAverage))}/h", Styling.TextSecondary);
+            if (prefs.FarmItem != 0)
+            {
+                Styling.TextWrapped(vessel.Type == VesselType.Submarine
+                    ? $"{Sheets.ItemName(prefs.FarmItem)}: ≈{route.ItemUnits:0.##} per voyage"
+                    : $"{Sheets.ItemName(prefs.FarmItem)}: {route.ItemUnits:0} of {route.Sectors.Length} sectors",
+                    route.ItemUnits > 0 ? Styling.AccentMint : Styling.TextMuted);
+            }
             if (planner.Results.Count > 1)
             {
                 ImGui.SameLine();
@@ -169,11 +189,17 @@ public sealed class PlannerOverlay : Window, IDisposable
 
         Styling.VSpace(4f);
         var interop = plugin.PlannerInterop;
+        var cfg = plugin.Config;
         var canApply = route != null && !planner.Computing && !interop.Applying;
         var half = (ImGui.GetContentRegionAvail().X - 6f * scale) * 0.5f;
-        if (Buttons.Action(interop.Applying ? "Applying…" : "Apply route", canApply, half))
+
+        var label = interop.Deploying ? "Deploying…"
+            : interop.Applying ? "Applying…"
+            : cfg.DeployAfterApply ? "Apply and deploy"
+            : "Apply route";
+        if (Buttons.Action(label, canApply, half, cfg.DeployAfterApply ? Styling.AccentAmber : Styling.AccentTeal))
         {
-            if (!interop.ApplyRoute(data, vessel.Type, route!.Sectors))
+            if (!interop.ApplyRoute(data, vessel.Type, route!.Sectors, cfg.DeployAfterApply))
                 Service.Log.Information("Argus: apply refused: {Reason}", interop.LastError ?? "unknown");
         }
 
@@ -181,9 +207,20 @@ public sealed class PlannerOverlay : Window, IDisposable
         if (Buttons.Action("Open planner", true, half, Styling.AccentBlue))
             plugin.MainWindow.ShowPage(MainWindow.Page.Planner);
 
+        var deployAfter = cfg.DeployAfterApply;
+        if (ImGui.Checkbox("Deploy after applying", ref deployAfter))
+        {
+            cfg.DeployAfterApply = deployAfter;
+            cfg.Save();
+        }
+
+        Styling.Tooltip("Once Apply has selected every sector, press Deploy and confirm the detail window, sending the vessel without another click. Only ever runs because you pressed Apply.");
+
         if (interop.LastError != null)
-            Styling.Text(interop.LastError, Styling.AccentRose);
+            Styling.TextWrapped(interop.LastError, Styling.AccentRose);
         else
-            Styling.Text("Apply selects the sectors; you press Deploy.", Styling.TextMuted);
+            Styling.TextWrapped(cfg.DeployAfterApply
+                ? "Apply selects the sectors, then deploys."
+                : "Apply selects the sectors; you press Deploy.", Styling.TextMuted);
     }
 }

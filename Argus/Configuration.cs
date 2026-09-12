@@ -47,6 +47,12 @@ public sealed class Configuration : IPluginConfiguration
     // Planner overlay docked to the in-game voyage window
     public bool ShowPlannerOverlay = true;
 
+    /// <summary>
+    /// Tick on the overlay: after Apply has selected every sector, press Deploy and confirm. Off by default, and it
+    /// only ever fires from the player pressing Apply.
+    /// </summary>
+    public bool DeployAfterApply;
+
     // Main window
     public bool OpenOnWorkshopEnter = false;
 
