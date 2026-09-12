@@ -74,6 +74,20 @@ internal static unsafe class DebugSection
         if (parts.LastResult != null)
             Styling.TextWrapped($"last result: {parts.LastResult}", Styling.AccentMint);
 
+        if (parts.IsPartsWindowOpen)
+        {
+            for (var slot = 0; slot < 4; slot++)
+            {
+                if (slot > 0)
+                    ImGui.SameLine();
+                var captured = slot;
+                if (Buttons.Action($"Slot {captured}", true, 70f * scale))
+                    Service.Log.Information("Argus: slot {Slot} request sent = {Sent}", captured, parts.RequestSlot(captured));
+            }
+
+            Styling.TextWrapped($"picker open = {parts.IsPickerOpen}. Press a slot: the game should open its part list.", Styling.TextMuted);
+        }
+
         var entries = parts.MenuEntries();
         if (entries.Count == 0)
             Styling.Text("No SelectString menu open.", Styling.TextMuted);

@@ -39,6 +39,10 @@ internal sealed unsafe class PartsInterop
     };
 
     private static readonly TimeSpan Interval = TimeSpan.FromMilliseconds(300);
+
+    /// <summary>How long to leave a slot request before asking again.</summary>
+    private static readonly TimeSpan SlotRetry = TimeSpan.FromMilliseconds(1200);
+
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(15);
 
     private enum Stage
@@ -57,6 +61,9 @@ internal sealed unsafe class PartsInterop
         /// <summary>Pick the wanted part out of that list.</summary>
         PickPart,
 
+        /// <summary>Let the list close before asking for the next slot.</summary>
+        AfterPick,
+
         /// <summary>Close the parts window once every slot is done.</summary>
         Close,
     }
@@ -65,6 +72,7 @@ internal sealed unsafe class PartsInterop
     private Stage stage;
     private DateTime stageSince;
     private DateTime lastStep = DateTime.MinValue;
+    private DateTime lastSlotFire = DateTime.MinValue;
     private int installed;
 
     public string? LastError { get; private set; }
@@ -111,6 +119,27 @@ internal sealed unsafe class PartsInterop
             return null;
         var addon = (AtkUnitBase*)ptr;
         return addon->IsVisible && addon->IsReady ? addon : null;
+    }
+
+    private static AddonContextIconMenu* Picker()
+    {
+        var ptr = Service.GameGui.GetAddonByName(PickerAddon).Address;
+        if (ptr == nint.Zero)
+            return null;
+        var picker = (AddonContextIconMenu*)ptr;
+        return picker->AtkUnitBase.IsVisible && picker->AtkUnitBase.IsReady ? picker : null;
+    }
+
+    public bool IsPickerOpen => Picker() != null;
+
+    /// <summary>DEBUG helper: ask the parts window for one slot's list, to check the callback in isolation.</summary>
+    public bool RequestSlot(int slot)
+    {
+        var supply = Addon(PartsAddon);
+        if (supply == null)
+            return false;
+        Callback.Fire(supply, true, 2, 1, slot, Callback.ZeroAtkValue, Callback.ZeroAtkValue, Callback.ZeroAtkValue);
+        return true;
     }
 
     public bool IsMenuOpen => Addon(MenuAddon) != null;
@@ -291,21 +320,32 @@ internal sealed unsafe class PartsInterop
                     return;
                 }
 
+                if (IsPickerOpen)
+                {
+                    Advance(Stage.PickPart, nowUtc);
+                    return;
+                }
+
+                // Ask again rather than assuming one request took: the window drops it while it is settling.
+                if (nowUtc - lastSlotFire < SlotRetry)
+                    return;
+
+                lastSlotFire = nowUtc;
                 var slot = pending.Peek().Slot;
                 Callback.Fire(supply, true, 2, 1, slot, Callback.ZeroAtkValue, Callback.ZeroAtkValue, Callback.ZeroAtkValue);
-                Advance(Stage.PickPart, nowUtc);
                 return;
             }
 
             case Stage.PickPart:
             {
-                var pickerPtr = Service.GameGui.GetAddonByName(PickerAddon).Address;
-                if (pickerPtr == nint.Zero)
+                var picker = Picker();
+                if (picker == null)
+                {
+                    // It closed without us choosing; ask for the slot again.
+                    Advance(Stage.OpenSlot, nowUtc);
+                    lastSlotFire = DateTime.MinValue;
                     return;
-
-                var picker = (AddonContextIconMenu*)pickerPtr;
-                if (!picker->AtkUnitBase.IsVisible || !picker->AtkUnitBase.IsReady)
-                    return;
+                }
 
                 var count = picker->AtkValues[4];
                 if (count.Type != ValueType.UInt)
@@ -324,7 +364,7 @@ internal sealed unsafe class PartsInterop
                     Service.Log.Information("Argus: installing {Item} in slot {Slot}", wanted.ItemName, wanted.Slot);
                     pending.Dequeue();
                     installed++;
-                    Advance(pending.Count == 0 ? Stage.Close : Stage.OpenSlot, nowUtc);
+                    Advance(Stage.AfterPick, nowUtc);
                     return;
                 }
 
@@ -332,6 +372,14 @@ internal sealed unsafe class PartsInterop
                 Cancel();
                 return;
             }
+
+            case Stage.AfterPick:
+                // Wait for the list to close, or the next slot request lands on the one that is still up.
+                if (IsPickerOpen)
+                    return;
+                lastSlotFire = DateTime.MinValue;
+                Advance(pending.Count == 0 ? Stage.Close : Stage.OpenSlot, nowUtc);
+                return;
 
             case Stage.Close:
             {
@@ -366,5 +414,6 @@ internal sealed unsafe class PartsInterop
     {
         pending.Clear();
         stage = Stage.None;
+        lastSlotFire = DateTime.MinValue;
     }
 }
