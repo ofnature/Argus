@@ -121,7 +121,7 @@ public sealed class PlannerOverlay : Window, IDisposable
         }
 
         planner.Refresh();
-        var prefs = plugin.Config.PlannerFor(vessel.Type);
+        var prefs = plugin.Config.PlannerFor(vessel);
         var useAverage = prefs.AverageBonus || vessel.Type == VesselType.Airship;
 
         // Their own row: the overlay is 320px and the title line clips as soon as two badges appear.

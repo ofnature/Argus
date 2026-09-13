@@ -132,7 +132,7 @@ internal sealed class PlannerService : IDisposable
 
     /// <summary>True while unlock focus is on and there is a sector left to discover from here.</summary>
     public bool UnlockFocusActive
-        => Vessel is { } v && plugin.Config.PlannerFor(v.Type).UnlockFocus && AutoStep != null;
+        => Vessel is { } v && plugin.Config.PlannerFor(v).UnlockFocus && AutoStep != null;
 
     /// <summary>All must-includes that will be sent to the search: manual ones plus the auto step.</summary>
     public HashSet<uint> EffectiveMustInclude()
@@ -160,7 +160,7 @@ internal sealed class PlannerService : IDisposable
             return null;
         }
 
-        var prefs = plugin.Config.PlannerFor(v.Type);
+        var prefs = plugin.Config.PlannerFor(v);
         var unlocked = Unlocked(fc, v.Type);
         var explored = Explored(fc, v.Type);
 

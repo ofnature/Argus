@@ -32,6 +32,8 @@ public sealed class PlannerPrefs
 
     /// <summary>Item the planner is farming for; 0 plans for EXP. Mutually exclusive with <see cref="UnlockFocus"/>.</summary>
     public uint FarmItem;
+
+    public PlannerPrefs Clone() => (PlannerPrefs)MemberwiseClone();
 }
 
 [Serializable]
@@ -59,10 +61,32 @@ public sealed class Configuration : IPluginConfiguration
     /// <summary>FCs the user hid from the overview/DTR, by FC id.</summary>
     public HashSet<ulong> HiddenFreeCompanies = new();
 
+    /// <summary>
+    /// The settings every vessel of a type shared before they were stored per vessel. Now only the starting point for a
+    /// vessel the planner has not been used with yet, so upgrading changes nothing until a vessel is edited.
+    /// </summary>
     public PlannerPrefs SubmarinePlanner = new();
     public PlannerPrefs AirshipPlanner = new();
 
-    public PlannerPrefs PlannerFor(VesselType type) => type == VesselType.Airship ? AirshipPlanner : SubmarinePlanner;
+    /// <summary>
+    /// Planner settings per vessel, so a progression, a farming and a levelling submarine each keep their own route
+    /// type. Keyed by FC, type and slot: the slot is stable for a vessel's life and, unlike the name, survives a rename.
+    /// </summary>
+    public Dictionary<string, PlannerPrefs> VesselPlanners = new();
+
+    public static string VesselKey(Vessel vessel) => $"{vessel.FreeCompanyId}:{vessel.Type}:{vessel.Slot}";
+
+    public PlannerPrefs PlannerFor(Vessel vessel)
+    {
+        var key = VesselKey(vessel);
+        if (!VesselPlanners.TryGetValue(key, out var prefs))
+        {
+            prefs = (vessel.Type == VesselType.Airship ? AirshipPlanner : SubmarinePlanner).Clone();
+            VesselPlanners[key] = prefs;
+        }
+
+        return prefs;
+    }
 
     public void Save() => Service.PluginInterface.SavePluginConfig(this);
 }

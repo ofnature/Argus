@@ -38,7 +38,7 @@ internal static class PlannerSection
             return;
         }
 
-        var prefs = plugin.Config.PlannerFor(vessel.Type);
+        var prefs = plugin.Config.PlannerFor(vessel);
         var changed = DrawOptions(plugin, vessel, prefs);
         if (changed)
             plugin.Config.Save();
@@ -105,8 +105,15 @@ internal static class PlannerSection
     private static string VesselLabel(Plugin plugin, Vessel v)
     {
         var tag = plugin.Fleet.Store.TryGet(v.FreeCompanyId, out var fc) && !string.IsNullOrEmpty(fc.Tag) ? $"«{fc.Tag}» " : string.Empty;
-        return $"{tag}{v.Name} · {(v.Type == VesselType.Submarine ? "sub" : "airship")} · R{v.Rank}";
+        return $"{tag}{v.Name} · {(v.Type == VesselType.Submarine ? "sub" : "airship")} · R{v.Rank} · {ModeLabel(plugin.Config.PlannerFor(v))}";
     }
+
+    /// <summary>What a vessel's planner is set up to do, in a few words.</summary>
+    internal static string ModeLabel(PlannerPrefs prefs)
+        => prefs.UnlockFocus ? "unlock"
+            : prefs.FarmItem != 0 ? $"farm {Sheets.ItemName(prefs.FarmItem)}"
+            : prefs.Goal == RouteGoal.ExpPerVoyage ? "EXP/voyage"
+            : "EXP/hour";
 
     private static bool DrawOptions(Plugin plugin, Vessel vessel, PlannerPrefs prefs)
     {
@@ -302,7 +309,7 @@ internal static class PlannerSection
     private static void DrawProgression(Plugin plugin, Vessel vessel)
     {
         var step = plugin.Planner.AutoStep;
-        var prefs = plugin.Config.PlannerFor(vessel.Type);
+        var prefs = plugin.Config.PlannerFor(vessel);
         if (!prefs.ProgressionAutoInclude)
             return;
 
@@ -419,7 +426,7 @@ internal static class PlannerSection
         var planner = plugin.Planner;
         var data = plugin.Data;
         var scale = ImGuiHelpers.GlobalScale;
-        var prefs = plugin.Config.PlannerFor(vessel.Type);
+        var prefs = plugin.Config.PlannerFor(vessel);
         var useAverage = prefs.AverageBonus || vessel.Type == VesselType.Airship;
 
         Styling.SectionLabel("Suggested routes");

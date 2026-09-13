@@ -208,7 +208,7 @@ internal sealed class ArgusIpc : IDisposable
             return Fail("unknown parts on that vessel");
         }
 
-        var prefs = plugin.Config.PlannerFor(vessel.Type);
+        var prefs = plugin.Config.PlannerFor(vessel);
         var map = request.Map != 0 ? request.Map : vessel.Type == VesselType.Airship ? 1 : plugin.Planner.Map;
         var fc = plugin.Fleet.Store.TryGet(vessel.FreeCompanyId, out var record) ? record : null;
         var unlocked = fc == null ? new HashSet<uint>() : plugin.Planner.Unlocked(fc, vessel.Type);
@@ -280,7 +280,7 @@ internal sealed class ArgusIpc : IDisposable
         if (route.Length == 0)
             return Fail("no route to build for");
 
-        var prefs = plugin.Config.PlannerFor(vessel.Type);
+        var prefs = plugin.Config.PlannerFor(vessel);
         var rank = request.Rank > 0 ? request.Rank : vessel.Rank;
         var map = vessel.Type == VesselType.Airship ? 1 : plugin.Data.MapOf(vessel.Type, route[0]);
         var goal = Enum.TryParse<RouteGoal>(request.Goal, true, out var parsed) ? parsed : prefs.Goal;

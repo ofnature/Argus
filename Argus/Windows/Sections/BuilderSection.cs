@@ -47,7 +47,7 @@ internal static class BuilderSection
         }
 
         var scale = ImGuiHelpers.GlobalScale;
-        var prefs = plugin.Config.PlannerFor(vessel.Type);
+        var prefs = plugin.Config.PlannerFor(vessel);
         var useAverage = prefs.AverageBonus || vessel.Type == VesselType.Airship;
         var unlock = prefs.UnlockFocus && planner.AutoStep is { } step ? step : null;
         var farmItem = unlock == null ? prefs.FarmItem : 0;
