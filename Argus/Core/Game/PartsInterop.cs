@@ -29,9 +29,10 @@ internal sealed unsafe class PartsInterop
 
     /// <summary>
     /// The component window is not one addon for both vessel types: submarines drive the workshop's supply window
-    /// (verified in game), airships have their own. Whichever of these is on screen is the one that gets the callbacks.
+    /// (verified in game), airships open <c>AirShipPartsMenu</c> with the inventory in component-select mode beside
+    /// it. Whichever of these is on screen is the one that gets the callbacks.
     /// </summary>
-    private static readonly string[] PartsAddons = { "CompanyCraftSupply", "AirShipParts", "SubmersibleParts" };
+    private static readonly string[] PartsAddons = { "CompanyCraftSupply", "AirShipPartsMenu", "SubmersiblePartsMenu" };
 
     /// <summary>
     /// The change-components entry across the client languages, from AutoRetainer's list. Most languages phrase it
