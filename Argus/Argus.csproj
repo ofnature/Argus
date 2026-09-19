@@ -1,9 +1,9 @@
-<Project Sdk="Dalamud.NET.Sdk/15.0.0">
+﻿<Project Sdk="Dalamud.NET.Sdk/15.0.0">
 
   <PropertyGroup>
     <AssemblyName>Argus</AssemblyName>
     <RootNamespace>Argus</RootNamespace>
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
     <DalamudLibPath>$(AppData)\XIVLauncher\addon\Hooks\dev\</DalamudLibPath>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>

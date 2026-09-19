@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Argus.Core;
 using Argus.Core.Game;
 using Argus.Core.Model;
@@ -14,7 +14,7 @@ namespace Argus;
 
 public sealed class Plugin : IDalamudPlugin
 {
-    public const string PluginVersion = "0.1.0";
+    public const string PluginVersion = "0.1.1";
 
     private const string CommandName = "/argus";
 

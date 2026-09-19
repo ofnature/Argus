@@ -4,7 +4,7 @@
     "Name": "Argus",
     "Description": "Submarine and airship tracker: every FC vessel this client has seen, out/returned counts on the server info bar, EXP and rank-up calculator, route suggestions that respect rank, range, fuel and unlocks (must-include + progression), one-click route entry into the in-game planner, loot history, supply warnings and a part optimizer. Companion to Daedalus.",
     "InternalName": "Argus",
-    "AssemblyVersion": "0.1.0",
+    "AssemblyVersion": "0.1.1.0",
     "RepoUrl": "https://github.com/ofnature/Argus",
     "IconUrl": "https://raw.githubusercontent.com/ofnature/Argus/main/images/icon.png",
     "IsHide": false,
@@ -12,8 +12,8 @@
     "ApplicableVersion": "any",
     "CategoryTags": ["utility"],
     "DalamudApiLevel": 15,
-    "DownloadLinkInstall": "https://github.com/ofnature/Argus/releases/download/v0.1.0/latest.zip",
-    "DownloadLinkTesting": "https://github.com/ofnature/Argus/releases/download/v0.1.0/latest.zip",
-    "DownloadLinkUpdate": "https://github.com/ofnature/Argus/releases/download/v0.1.0/latest.zip"
+    "DownloadLinkInstall": "https://github.com/ofnature/Argus/releases/download/v0.1.1/latest.zip",
+    "DownloadLinkTesting": "https://github.com/ofnature/Argus/releases/download/v0.1.1/latest.zip",
+    "DownloadLinkUpdate": "https://github.com/ofnature/Argus/releases/download/v0.1.1/latest.zip"
   }
 ]
