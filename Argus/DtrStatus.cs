@@ -1,6 +1,7 @@
-using System;
+﻿using System;
 using System.Text;
 using Argus.Core;
+using Argus.Core.Calc;
 using Argus.Core.Model;
 using Argus.Windows;
 using Dalamud.Game.Gui.Dtr;
@@ -9,8 +10,9 @@ using Dalamud.Game.Text.SeStringHandling;
 namespace Argus;
 
 /// <summary>
-/// One server-info-bar entry: "Argus: Subs 2/4 · Air 1/2" as ready/total per vessel type, amber when anything is
-/// waiting to be collected. Text is rebuilt only when it changes so the bar does not re-layout every frame.
+/// One server-info-bar entry: "Argus: Out 3/4 · Subs 1/4 · Air 0/1" — voyage slots in use against the shared
+/// four-vessel limit, then ready/total per vessel type, amber when anything is waiting to be collected. Text is
+/// rebuilt only when it changes so the bar does not re-layout every frame.
 /// </summary>
 internal sealed class DtrStatus : IDisposable
 {
@@ -54,7 +56,8 @@ internal sealed class DtrStatus : IDisposable
         if (entry == null)
             return;
 
-        var show = config.ShowDtrBar && (config.DtrShowSubmarines || config.DtrShowAirships);
+        // The slot count stands on its own, so turning both types off is the compact form rather than no entry.
+        var show = config.ShowDtrBar;
         if (!primed || show != lastShown)
         {
             entry.Shown = show;
@@ -64,30 +67,33 @@ internal sealed class DtrStatus : IDisposable
         var subs = fleet.CountsFor(VesselType.Submarine, nowUtc);
         var air = fleet.CountsFor(VesselType.Airship, nowUtc);
 
+        var deployed = subs.Out + air.Out;
+
         // Cache key: rebuilding the SeString every frame makes the whole bar jitter.
-        var key = $"{subs.Ready}/{subs.Total}|{air.Ready}/{air.Total}|{config.DtrShowSubmarines}|{config.DtrShowAirships}";
+        var key = $"{deployed}|{subs.Ready}/{subs.Total}|{air.Ready}/{air.Total}|{config.DtrShowSubmarines}|{config.DtrShowAirships}";
         if (primed && key == lastText)
             return;
         lastText = key;
         primed = true;
 
-        var sb = new SeStringBuilder().AddText("Argus: ");
-        var first = true;
+        var sb = new SeStringBuilder().AddText("Argus: Out ");
+        var slotColor = subs.Returned + air.Returned > 0 ? ColorReady : deployed > 0 ? ColorOut : ColorIdle;
+        sb.AddUiForeground(slotColor).AddText($"{deployed}/{VoyageMath.MaxDeployedVessels}").AddUiForegroundOff();
+
         if (config.DtrShowSubmarines)
         {
+            sb.AddText(" · ");
             Append(sb, "Subs", subs);
-            first = false;
         }
 
         if (config.DtrShowAirships)
         {
-            if (!first)
-                sb.AddText(" · ");
+            sb.AddText(" · ");
             Append(sb, "Air", air);
         }
 
         entry.Text = sb.Build();
-        entry.Tooltip = BuildTooltip(subs, air, nowUtc);
+        entry.Tooltip = BuildTooltip(subs, air, deployed, nowUtc);
     }
 
     private static void Append(SeStringBuilder sb, string label, FleetService.Counts c)
@@ -97,9 +103,13 @@ internal sealed class DtrStatus : IDisposable
         sb.AddUiForeground(color).AddText($"{c.Ready}/{c.Total}").AddUiForegroundOff();
     }
 
-    private static string BuildTooltip(FleetService.Counts subs, FleetService.Counts air, DateTime nowUtc)
+    private static string BuildTooltip(FleetService.Counts subs, FleetService.Counts air, int deployed, DateTime nowUtc)
     {
+        var free = VoyageMath.MaxDeployedVessels - deployed;
         var sb = new StringBuilder();
+        sb.Append(deployed).Append(" of ").Append(VoyageMath.MaxDeployedVessels).Append(" voyage slots in use, ")
+            .Append(free).Append(" free.")
+            .Append("\nThe limit is shared: four vessels out at once across both types.\n\n");
         Line(sb, "Submarines", subs, nowUtc);
         sb.Append('\n');
         Line(sb, "Airships", air, nowUtc);

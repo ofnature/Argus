@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Argus.Core.Model;
 
@@ -17,6 +17,12 @@ public static class VoyageMath
     public const int FixedVoyageSeconds = 43200;
 
     public const int MaxSectorsPerVoyage = 5;
+
+    /// <summary>
+    /// How many vessels a Free Company can have on a voyage at once. The limit is shared: four in total across
+    /// submarines and airships, however many of each are registered.
+    /// </summary>
+    public const int MaxDeployedVessels = 4;
 
     public delegate (int Distance, int Seconds) LegFunc(SectorInfo from, SectorInfo to, int speed);
 

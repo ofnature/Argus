@@ -1,4 +1,4 @@
-using System.Linq;
+﻿using System.Linq;
 using Argus.Windows.Components;
 using Dalamud.Bindings.ImGui;
 
@@ -14,7 +14,7 @@ internal static class SettingsSection
         var changed = false;
         using (var g = SettingsGroup.Begin("Server info bar"))
         {
-            changed |= g.Toggle("Show Argus on the server info bar", "Ready/total counts per vessel type. Amber when something is waiting to be collected.", ref cfg.ShowDtrBar);
+            changed |= g.Toggle("Show Argus on the server info bar", "Voyage slots in use against the shared limit of four, then ready/total per vessel type. Amber when something is waiting to be collected.", ref cfg.ShowDtrBar);
             changed |= g.Toggle("Include submarines", null, ref cfg.DtrShowSubmarines);
             changed |= g.Toggle("Include airships", null, ref cfg.DtrShowAirships);
         }
