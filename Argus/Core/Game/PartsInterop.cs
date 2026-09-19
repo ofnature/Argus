@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using Argus.Core.Data;
@@ -16,7 +16,7 @@ namespace Argus.Core.Game;
 /// Installs a build through the game's own parts windows, the way AutoRetainer's part swapper does.
 ///
 /// <para>The chain starts at the vessel's menu on the Voyage Control Panel: pick the change-components entry, which
-/// opens <c>CompanyCraftSupply</c>; each slot opens a <c>ContextIconMenu</c> of the parts you own; picking one
+/// opens the component window; each slot opens a <c>ContextIconMenu</c> of the parts you own; picking one
 /// installs it. Only slots that differ from the target are touched, and the run aborts rather than guessing.</para>
 ///
 /// <para>This spends crafted parts, so nothing here starts on its own: it runs only from the Builder's apply button.
@@ -25,8 +25,13 @@ namespace Argus.Core.Game;
 internal sealed unsafe class PartsInterop
 {
     private const string MenuAddon = "SelectString";
-    private const string PartsAddon = "CompanyCraftSupply";
     private const string PickerAddon = "ContextIconMenu";
+
+    /// <summary>
+    /// The component window is not one addon for both vessel types: submarines drive the workshop's supply window
+    /// (verified in game), airships have their own. Whichever of these is on screen is the one that gets the callbacks.
+    /// </summary>
+    private static readonly string[] PartsAddons = { "CompanyCraftSupply", "AirShipParts", "SubmersibleParts" };
 
     /// <summary>
     /// The change-components entry across the client languages, from AutoRetainer's list. Most languages phrase it
@@ -101,7 +106,7 @@ internal sealed unsafe class PartsInterop
             if (IsPartsWindowOpen)
                 return null;
             if (!IsMenuOpen)
-                return "open the vessel on the Voyage Control Panel";
+                return "open the vessel on the Voyage Control Panel and choose to change its components";
             return FindChangeEntry() >= 0 ? null : "that menu has no change-components entry";
         }
     }
@@ -122,6 +127,34 @@ internal sealed unsafe class PartsInterop
             return null;
         var addon = (AtkUnitBase*)ptr;
         return addon->IsVisible && addon->IsReady ? addon : null;
+    }
+
+    /// <summary>The component window that is open, or null when none of them is.</summary>
+    private static AtkUnitBase* PartsWindow()
+    {
+        foreach (var name in PartsAddons)
+        {
+            var addon = Addon(name);
+            if (addon != null)
+                return addon;
+        }
+
+        return null;
+    }
+
+    /// <summary>Which component window is open, for the Debug page and the log.</summary>
+    public static string? PartsWindowName
+    {
+        get
+        {
+            foreach (var name in PartsAddons)
+            {
+                if (Addon(name) != null)
+                    return name;
+            }
+
+            return null;
+        }
     }
 
     private static AddonContextIconMenu* Picker()
@@ -190,7 +223,7 @@ internal sealed unsafe class PartsInterop
     /// <summary>DEBUG helper: ask the parts window for one slot's list, to check the callback in isolation.</summary>
     public bool RequestSlot(int slot)
     {
-        var supply = Addon(PartsAddon);
+        var supply = PartsWindow();
         if (supply == null)
             return false;
         Callback.Fire(supply, true, 2, 1, slot, Callback.ZeroAtkValue, Callback.ZeroAtkValue, Callback.ZeroAtkValue);
@@ -199,7 +232,7 @@ internal sealed unsafe class PartsInterop
 
     public bool IsMenuOpen => Addon(MenuAddon) != null;
 
-    public bool IsPartsWindowOpen => Addon(PartsAddon) != null;
+    public bool IsPartsWindowOpen => PartsWindow() != null;
 
     /// <summary>Can a build be applied from what is on screen right now.</summary>
     public bool CanStart => !Running && (IsPartsWindowOpen || (IsMenuOpen && FindChangeEntry() >= 0));
@@ -271,6 +304,7 @@ internal sealed unsafe class PartsInterop
             pending.Enqueue((slot, item, Sheets.ItemName(item)));
 
         installed = 0;
+        Service.Log.Information("Argus: applying a build through {Window}", PartsWindowName ?? "the vessel menu");
         stage = IsPartsWindowOpen ? Stage.OpenSlot : Stage.SelectMenu;
         stageSince = DateTime.UtcNow;
         return true;
@@ -362,7 +396,7 @@ internal sealed unsafe class PartsInterop
 
             case Stage.OpenSlot:
             {
-                var supply = Addon(PartsAddon);
+                var supply = PartsWindow();
                 if (supply == null)
                 {
                     LastError = "The parts window closed before the build was applied.";
@@ -436,7 +470,7 @@ internal sealed unsafe class PartsInterop
 
             case Stage.Close:
             {
-                var supply = Addon(PartsAddon);
+                var supply = PartsWindow();
                 if (supply == null)
                 {
                     Finish();

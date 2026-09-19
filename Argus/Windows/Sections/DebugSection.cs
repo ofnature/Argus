@@ -1,4 +1,4 @@
-#if DEBUG
+﻿#if DEBUG
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -9,6 +9,8 @@ using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using FFXIVClientStructs.FFXIV.Client.Game;
+using FFXIVClientStructs.FFXIV.Client.UI;
+using FFXIVClientStructs.FFXIV.Component.GUI;
 
 namespace Argus.Windows.Sections;
 
@@ -19,6 +21,29 @@ namespace Argus.Windows.Sections;
 internal static unsafe class DebugSection
 {
     private static List<string> distanceReport = new();
+
+    /// <summary>Every addon the client has on screen, so an unrecognised game window can be named.</summary>
+    private static List<string> OpenAddons()
+    {
+        var names = new List<string>();
+        var manager = RaptureAtkUnitManager.Instance();
+        if (manager == null)
+            return names;
+
+        for (var i = 0; i < manager->AllLoadedUnitsList.Count; i++)
+        {
+            var unit = manager->AllLoadedUnitsList.Entries[i].Value;
+            if (unit == null || !unit->IsVisible)
+                continue;
+
+            var name = unit->NameString;
+            if (!string.IsNullOrEmpty(name) && !names.Contains(name))
+                names.Add(name);
+        }
+
+        names.Sort(StringComparer.OrdinalIgnoreCase);
+        return names;
+    }
 
     public static void Draw(Plugin plugin)
     {
@@ -65,7 +90,7 @@ internal static unsafe class DebugSection
         Styling.VSpace(8f);
         Styling.SectionLabel("Parts");
         var parts = plugin.PartsInterop;
-        Styling.Text($"menu open = {parts.IsMenuOpen} · parts window open = {parts.IsPartsWindowOpen} · can start = {parts.CanStart} · stage {parts.StageName} ({parts.Installed} done, {parts.Remaining} left)",
+        Styling.Text($"menu open = {parts.IsMenuOpen} · component window = {Core.Game.PartsInterop.PartsWindowName ?? "none"} · can start = {parts.CanStart} · stage {parts.StageName} ({parts.Installed} done, {parts.Remaining} left)",
             parts.CanStart || parts.Running ? Styling.TextSecondary : Styling.AccentRose);
         if (parts.Blocker is { } partsBlocker)
             Styling.Text($"blocked: {partsBlocker}", Styling.AccentRose);
@@ -96,6 +121,9 @@ internal static unsafe class DebugSection
         else
             foreach (var (entry, i) in entries.Select((e, i) => (e, i)))
                 Styling.Text($"  [{i}] {entry}", Styling.TextDim);
+
+        // Names whatever window is actually on screen, which is how the component window gets identified per type.
+        Styling.TextWrapped($"open addons: {string.Join(", ", OpenAddons())}", Styling.TextDim);
 
         Styling.VSpace(8f);
         Styling.SectionLabel("Planner addon");
