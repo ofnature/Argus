@@ -69,8 +69,11 @@ internal sealed class DtrStatus : IDisposable
 
         var deployed = subs.Out + air.Out;
 
+        // Four slots belong to a workshop, not a player, so a fleet spanning two companies has eight.
+        var slots = VoyageMath.MaxDeployedVessels * Math.Max(1, fleet.VisibleCompanyCount());
+
         // Cache key: rebuilding the SeString every frame makes the whole bar jitter.
-        var key = $"{deployed}|{subs.Ready}/{subs.Total}|{air.Ready}/{air.Total}|{config.DtrShowSubmarines}|{config.DtrShowAirships}";
+        var key = $"{deployed}/{slots}|{subs.Ready}/{subs.Total}|{air.Ready}/{air.Total}|{config.DtrShowSubmarines}|{config.DtrShowAirships}";
         if (primed && key == lastText)
             return;
         lastText = key;
@@ -78,7 +81,7 @@ internal sealed class DtrStatus : IDisposable
 
         var sb = new SeStringBuilder().AddText("Argus: Out ");
         var slotColor = subs.Returned + air.Returned > 0 ? ColorReady : deployed > 0 ? ColorOut : ColorIdle;
-        sb.AddUiForeground(slotColor).AddText($"{deployed}/{VoyageMath.MaxDeployedVessels}").AddUiForegroundOff();
+        sb.AddUiForeground(slotColor).AddText($"{deployed}/{slots}").AddUiForegroundOff();
 
         if (config.DtrShowSubmarines)
         {
@@ -93,7 +96,7 @@ internal sealed class DtrStatus : IDisposable
         }
 
         entry.Text = sb.Build();
-        entry.Tooltip = BuildTooltip(subs, air, deployed, nowUtc);
+        entry.Tooltip = BuildTooltip(subs, air, deployed, slots, nowUtc);
     }
 
     private static void Append(SeStringBuilder sb, string label, FleetService.Counts c)
@@ -103,13 +106,12 @@ internal sealed class DtrStatus : IDisposable
         sb.AddUiForeground(color).AddText($"{c.Ready}/{c.Total}").AddUiForegroundOff();
     }
 
-    private static string BuildTooltip(FleetService.Counts subs, FleetService.Counts air, int deployed, DateTime nowUtc)
+    private static string BuildTooltip(FleetService.Counts subs, FleetService.Counts air, int deployed, int slots, DateTime nowUtc)
     {
-        var free = VoyageMath.MaxDeployedVessels - deployed;
         var sb = new StringBuilder();
-        sb.Append(deployed).Append(" of ").Append(VoyageMath.MaxDeployedVessels).Append(" voyage slots in use, ")
-            .Append(free).Append(" free.")
-            .Append("\nThe limit is shared: four vessels out at once across both types.\n\n");
+        sb.Append(deployed).Append(" of ").Append(slots).Append(" voyage slots in use, ")
+            .Append(slots - deployed).Append(" free.")
+            .Append("\nFour vessels out at once per Free Company, across both types.\n\n");
         Line(sb, "Submarines", subs, nowUtc);
         sb.Append('\n');
         Line(sb, "Airships", air, nowUtc);

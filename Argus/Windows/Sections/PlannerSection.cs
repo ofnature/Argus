@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -414,6 +414,9 @@ internal static class PlannerSection
             if (Buttons.Action("Clear", true, 70f * scale))
                 planner.ClearMust();
         }
+
+        if (planner.VoyageSlotWarning(DateTime.UtcNow) is { } slots)
+            Styling.TextWrapped("⚠ " + slots, Styling.AccentAmber);
 
         foreach (var issue in planner.Issues)
             Styling.Text("⚠ " + issue, Styling.AccentRose);

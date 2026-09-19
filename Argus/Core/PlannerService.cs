@@ -1,10 +1,11 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Argus.Core.Calc;
 using Argus.Core.Model;
+using Argus.Windows;
 
 namespace Argus.Core;
 
@@ -133,6 +134,25 @@ internal sealed class PlannerService : IDisposable
     /// <summary>True while unlock focus is on and there is a sector left to discover from here.</summary>
     public bool UnlockFocusActive
         => Vessel is { } v && plugin.Config.PlannerFor(v).UnlockFocus && AutoStep != null;
+
+    /// <summary>
+    /// Null unless the selected vessel has nowhere to go: four vessels can be out at once per Free Company, so a
+    /// route still plans and applies, but the game will not send it until one of the others is back.
+    /// </summary>
+    public string? VoyageSlotWarning(DateTime nowUtc)
+    {
+        var vessel = Vessel;
+        if (vessel == null || vessel.IsOut(nowUtc))
+            return null;
+
+        var deployed = plugin.Fleet.DeployedIn(vessel.FreeCompanyId, nowUtc);
+        if (deployed.Count < VoyageMath.MaxDeployedVessels)
+            return null;
+
+        var next = deployed[0];
+        return $"All {VoyageMath.MaxDeployedVessels} voyage slots are in use, so {vessel.Name} cannot be sent yet. "
+               + $"{next.Name} is back in {Formatting.Duration(next.Remaining(nowUtc))}.";
+    }
 
     /// <summary>All must-includes that will be sent to the search: manual ones plus the auto step.</summary>
     public HashSet<uint> EffectiveMustInclude()

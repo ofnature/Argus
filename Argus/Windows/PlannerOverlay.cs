@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Numerics;
 using Argus.Core;
@@ -186,6 +186,9 @@ public sealed class PlannerOverlay : Window, IDisposable
                 Styling.Text($"(#{planner.Chosen + 1} of {planner.Results.Count})", Styling.TextDim);
             }
         }
+
+        if (planner.VoyageSlotWarning(DateTime.UtcNow) is { } slots)
+            Styling.TextWrapped(slots, Styling.AccentAmber);
 
         Styling.VSpace(4f);
         var interop = plugin.PlannerInterop;

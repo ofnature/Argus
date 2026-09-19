@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -174,6 +174,17 @@ internal sealed class FleetService
 
     public IEnumerable<Vessel> VisibleVessels()
         => Store.AllVessels(config.HiddenFreeCompanies);
+
+    /// <summary>The vessels of one Free Company that are on a voyage right now, soonest back first.</summary>
+    public List<Vessel> DeployedIn(ulong fcId, DateTime nowUtc)
+        => VisibleVessels()
+            .Where(v => v.FreeCompanyId == fcId && v.IsOut(nowUtc))
+            .OrderBy(v => v.ReturnTime)
+            .ToList();
+
+    /// <summary>How many Free Companies the visible fleet spans; each workshop has its own four voyage slots.</summary>
+    public int VisibleCompanyCount()
+        => VisibleVessels().Select(v => v.FreeCompanyId).Distinct().Count();
 
     public readonly record struct Counts(int Total, int Out, int Returned, int Idle, Vessel? NextReturn)
     {
