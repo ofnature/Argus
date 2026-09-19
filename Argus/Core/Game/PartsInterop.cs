@@ -28,9 +28,9 @@ internal sealed unsafe class PartsInterop
     private const string PickerAddon = "ContextIconMenu";
 
     /// <summary>
-    /// The component window is not one addon for both vessel types: submarines drive the workshop's supply window
-    /// (verified in game), airships open <c>AirShipPartsMenu</c> with the inventory in component-select mode beside
-    /// it. Whichever of these is on screen is the one that gets the callbacks.
+    /// The component window is not one addon for both vessel types: submarines drive the workshop's supply window,
+    /// airships open <c>AirShipPartsMenu</c> with the inventory in component-select mode beside it. Both answer the
+    /// same callbacks (verified in game), so whichever is on screen is the one driven.
     /// </summary>
     private static readonly string[] PartsAddons = { "CompanyCraftSupply", "AirShipPartsMenu", "SubmersiblePartsMenu" };
 
