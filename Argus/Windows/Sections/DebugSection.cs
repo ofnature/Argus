@@ -22,6 +22,9 @@ internal static unsafe class DebugSection
 {
     private static List<string> distanceReport = new();
 
+    /// <summary>Name fragments of the windows a vessel's component screen is made of.</summary>
+    private static readonly string[] VesselWindowWords = { "Ship", "Submersible", "Sub", "Company", "Craft", "Parts", "Select", "Inventory", "Context" };
+
     /// <summary>Every addon the client has on screen, so an unrecognised game window can be named.</summary>
     private static List<string> OpenAddons()
     {
@@ -122,8 +125,15 @@ internal static unsafe class DebugSection
             foreach (var (entry, i) in entries.Select((e, i) => (e, i)))
                 Styling.Text($"  [{i}] {entry}", Styling.TextDim);
 
-        // Names whatever window is actually on screen, which is how the component window gets identified per type.
-        Styling.TextWrapped($"open addons: {string.Join(", ", OpenAddons())}", Styling.TextDim);
+        // Names whatever windows are on screen, which is how a component window Argus does not know gets identified.
+        var open = OpenAddons();
+        var likely = open.Where(n => VesselWindowWords.Any(w => n.Contains(w, StringComparison.OrdinalIgnoreCase))).ToList();
+        Styling.Text($"vessel windows: {(likely.Count == 0 ? "none" : string.Join(", ", likely))}", likely.Count == 0 ? Styling.TextMuted : Styling.AccentMint);
+        Styling.Text($"open addons ({open.Count}):", Styling.TextMuted);
+
+        // Five to a line: the list runs past the window edge as one paragraph, which is how it got cut off before.
+        for (var i = 0; i < open.Count; i += 5)
+            Styling.Text("  " + string.Join(", ", open.Skip(i).Take(5)), Styling.TextDim);
 
         Styling.VSpace(8f);
         Styling.SectionLabel("Planner addon");
