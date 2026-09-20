@@ -24,8 +24,9 @@ first release, not stale.
 There are two `repo.json` files and they are not equals:
 
 - **`D:\Dev\Olympus\repo.json` is the one users install from.** It is the shared Dalamud third-party
-  listing for Daedalus, Charon, SealBreaker, Theseus, Odysseus and Caduceus, served from
-  `https://raw.githubusercontent.com/ofnature/Daedalus/main/repo.json`. **Argus is not in it.**
+  listing for Daedalus, Charon, SealBreaker, Theseus, Odysseus, Caduceus, Argus and Ariadne, served
+  from `https://raw.githubusercontent.com/ofnature/Daedalus/main/repo.json`. **Argus is in it, at
+  v0.1.1.**
 - **`D:\Dev\Argus\repo.json` is a mirror**, per this repo's CLAUDE.md. Keeping it correct is good
   hygiene, but editing it alone changes nothing for anyone.
 
