@@ -222,7 +222,8 @@ internal static class BuilderSection
             Styling.Text(carried > 0 ? $"(carrying {carried})" : "(none carried)", carried > 0 ? Styling.TextDim : Styling.AccentRose);
         }
 
-        var ready = haveAll && parts.CanStart && !plugin.RepairInterop.Running;
+        var blocker = parts.BlockerFor(vessel);
+        var ready = haveAll && blocker == null && !plugin.RepairInterop.Running;
         if (Buttons.Action($"Install {changes.Count} part{(changes.Count == 1 ? string.Empty : "s")}", ready, 160f * scale, Styling.AccentAmber))
         {
             Service.Log.Information("Argus: install pressed for {Build}, {Count} parts", build.Identifier, changes.Count);
@@ -235,7 +236,7 @@ internal static class BuilderSection
             ImGui.SameLine();
             Styling.Text("craft or withdraw the missing parts first", Styling.TextMuted);
         }
-        else if (parts.Blocker is { } blocker)
+        else if (blocker != null)
         {
             ImGui.SameLine();
             Styling.Text(blocker, Styling.TextMuted);

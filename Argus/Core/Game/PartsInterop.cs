@@ -75,6 +75,7 @@ internal sealed unsafe class PartsInterop
     }
 
     private readonly Queue<(int Slot, uint ItemId, string ItemName)> pending = new();
+    private (VesselType Type, int Slot, string Name)? installingFor;
     private Stage stage;
     private DateTime stageSince;
     private DateTime lastStep = DateTime.MinValue;
@@ -110,6 +111,24 @@ internal sealed unsafe class PartsInterop
                 return "open the vessel on the Voyage Control Panel and choose to change its components";
             return FindChangeEntry() >= 0 ? null : "that menu has no change-components entry";
         }
+    }
+
+    /// <summary>
+    /// Why <paramref name="vessel"/>'s build cannot be installed from what is on screen, or null when it can. Neither the
+    /// menu nor the parts window says whose it is, so the workshop's selected vessel has to be this one: otherwise a
+    /// card's build would land on whichever vessel happened to be open, spending its parts.
+    /// </summary>
+    public string? BlockerFor(Vessel vessel)
+    {
+        if (Blocker is { } blocker)
+            return blocker;
+
+        return WorkshopReader.IsSelected(vessel.Type, vessel.Slot) switch
+        {
+            true => null,
+            false => "that window is for another vessel",
+            null => $"select {vessel.Name} on the Voyage Control Panel",
+        };
     }
 
     /// <summary>The entries Argus can see on the open menu, for the Debug page.</summary>
@@ -295,7 +314,7 @@ internal sealed unsafe class PartsInterop
             }
         }
 
-        if (Blocker is { } blocker)
+        if (BlockerFor(vessel) is { } blocker)
         {
             LastError = $"Cannot start: {blocker}.";
             return false;
@@ -305,6 +324,7 @@ internal sealed unsafe class PartsInterop
             pending.Enqueue((slot, item, Sheets.ItemName(item)));
 
         installed = 0;
+        installingFor = (vessel.Type, vessel.Slot, vessel.Name);
         Service.Log.Information("Argus: applying a build through {Window}", PartsWindowName ?? "the vessel menu");
         stage = IsPartsWindowOpen ? Stage.OpenSlot : Stage.SelectMenu;
         stageSince = DateTime.UtcNow;
@@ -379,6 +399,14 @@ internal sealed unsafe class PartsInterop
                 var addon = Addon(MenuAddon);
                 if (addon == null)
                     return;
+
+                // Checked again at the click, not only when the button was pressed.
+                if (installingFor is { } t && WorkshopReader.IsSelected(t.Type, t.Slot) != true)
+                {
+                    LastError = $"The open menu is not {t.Name}'s.";
+                    Cancel();
+                    return;
+                }
 
                 var index = FindChangeEntry();
                 if (index < 0)
