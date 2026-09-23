@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -85,8 +85,12 @@ internal sealed class FleetStore
                 {
                     record.Vessels.Add(v);
                     changed = true;
+                    continue;
                 }
-                else if (!record.Vessels[index].SameState(v))
+
+                // A read can see the vessel but not its parts' condition; keep what an earlier read saw.
+                v.KeepConditionFrom(record.Vessels[index]);
+                if (!record.Vessels[index].SameState(v))
                 {
                     record.Vessels[index] = v;
                     changed = true;

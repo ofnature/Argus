@@ -1,5 +1,6 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Argus.Core.Model;
 
@@ -48,9 +49,53 @@ public sealed class Vessel
     public int Range;
     public int Favor;
 
+    /// <summary>
+    /// Part condition in slot order, 0-30000 (30000 is 100%), read from the installed parts' inventory items; -1 for a
+    /// slot no read has seen. A part at 0 is broken, and the game will not send the vessel until it is repaired.
+    /// </summary>
+    public int[] Condition = { -1, -1, -1, -1 };
+
     public DateTime LastSeenUtc;
 
+    public const int FullCondition = 30000;
+
     public bool IsDeployed => ReturnTime != 0;
+
+    public bool ConditionKnown => Condition.Any(c => c >= 0);
+
+    /// <summary>Slots whose part is broken. Only a read that saw the part counts; an unknown slot is not broken.</summary>
+    public List<int> BrokenSlots()
+    {
+        var slots = new List<int>();
+        for (var i = 0; i < Condition.Length; i++)
+        {
+            if (Condition[i] == 0)
+                slots.Add(i);
+        }
+
+        return slots;
+    }
+
+    public ushort PartRow(int slot) => slot switch
+    {
+        0 => Hull,
+        1 => Stern,
+        2 => Bow,
+        _ => Bridge,
+    };
+
+    /// <summary>
+    /// Fill the slots this read could not see from an older read of the same vessel, as long as the part in that slot
+    /// is still the same one: a swapped part has its own condition, which the old reading says nothing about.
+    /// </summary>
+    public void KeepConditionFrom(Vessel older)
+    {
+        for (var i = 0; i < Condition.Length && i < older.Condition.Length; i++)
+        {
+            if (Condition[i] < 0 && older.Condition[i] >= 0 && PartRow(i) == older.PartRow(i))
+                Condition[i] = older.Condition[i];
+        }
+    }
 
     public DateTime ReturnUtc => DateTimeOffset.FromUnixTimeSeconds(ReturnTime).UtcDateTime;
 
@@ -78,7 +123,8 @@ public sealed class Vessel
             || RegisterTime != other.RegisterTime || ReturnTime != other.ReturnTime
             || Surveillance != other.Surveillance || Retrieval != other.Retrieval || Speed != other.Speed
             || Range != other.Range || Favor != other.Favor
-            || Points.Count != other.Points.Count)
+            || Points.Count != other.Points.Count
+            || !Condition.SequenceEqual(other.Condition))
             return false;
 
         for (var i = 0; i < Points.Count; i++)

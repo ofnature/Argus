@@ -154,6 +154,25 @@ internal sealed class PlannerService : IDisposable
                + $"{next.Name} is back in {Formatting.Duration(next.Remaining(nowUtc))}.";
     }
 
+    /// <summary>
+    /// Null unless the selected vessel has a broken part. The game refuses the voyage ("One or more components require
+    /// repairs"), so the route still plans, but the part has to be repaired before it can be sent.
+    /// </summary>
+    public string? RepairWarning()
+    {
+        var vessel = Vessel;
+        if (vessel == null)
+            return null;
+
+        var broken = vessel.BrokenSlots();
+        if (broken.Count == 0)
+            return null;
+
+        var parts = string.Join(" and ", broken.Select(s => Build.SlotName(vessel.Type, s).ToLowerInvariant()));
+        return $"{vessel.Name}'s {parts} {(broken.Count == 1 ? "is" : "are")} broken, so the game will not send it. "
+               + "Repair from the Vessels page.";
+    }
+
     /// <summary>All must-includes that will be sent to the search: manual ones plus the auto step.</summary>
     public HashSet<uint> EffectiveMustInclude()
     {

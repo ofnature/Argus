@@ -29,6 +29,7 @@ public sealed class Plugin : IDalamudPlugin
     internal PlannerService Planner { get; }
     internal PlannerInterop PlannerInterop { get; }
     internal PartsInterop PartsInterop { get; }
+    internal RepairInterop RepairInterop { get; }
     internal LootStore Loot { get; }
     internal MainWindow MainWindow { get; }
 
@@ -54,6 +55,7 @@ public sealed class Plugin : IDalamudPlugin
         Planner = new PlannerService(this);
         PlannerInterop = new PlannerInterop();
         PartsInterop = new PartsInterop();
+        RepairInterop = new RepairInterop();
         Loot = new LootStore(Service.PluginInterface.GetPluginConfigDirectory());
         lootHook = new LootHook(this, Loot);
         lootHook.Recorded += OnLootRecorded;
@@ -89,6 +91,7 @@ public sealed class Plugin : IDalamudPlugin
         Fleet.Update(now);
         PlannerInterop.Update(now);
         PartsInterop.Update(now);
+        RepairInterop.Update(now);
         dtr.Update(now);
     }
 

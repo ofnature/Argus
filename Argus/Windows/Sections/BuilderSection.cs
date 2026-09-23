@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using Argus.Core;
@@ -222,7 +222,7 @@ internal static class BuilderSection
             Styling.Text(carried > 0 ? $"(carrying {carried})" : "(none carried)", carried > 0 ? Styling.TextDim : Styling.AccentRose);
         }
 
-        var ready = haveAll && parts.CanStart;
+        var ready = haveAll && parts.CanStart && !plugin.RepairInterop.Running;
         if (Buttons.Action($"Install {changes.Count} part{(changes.Count == 1 ? string.Empty : "s")}", ready, 160f * scale, Styling.AccentAmber))
         {
             Service.Log.Information("Argus: install pressed for {Build}, {Count} parts", build.Identifier, changes.Count);

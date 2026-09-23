@@ -190,6 +190,9 @@ public sealed class PlannerOverlay : Window, IDisposable
         if (planner.VoyageSlotWarning(DateTime.UtcNow) is { } slots)
             Styling.TextWrapped(slots, Styling.AccentAmber);
 
+        if (planner.RepairWarning() is { } repair)
+            Styling.TextWrapped(repair, Styling.AccentAmber);
+
         Styling.VSpace(4f);
         var interop = plugin.PlannerInterop;
         var cfg = plugin.Config;

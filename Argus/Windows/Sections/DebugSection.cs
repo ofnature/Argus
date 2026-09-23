@@ -136,6 +136,32 @@ internal static unsafe class DebugSection
             Styling.Text("  " + string.Join(", ", open.Skip(i).Take(5)), Styling.TextDim);
 
         Styling.VSpace(8f);
+        Styling.SectionLabel("Repair");
+        var repair = plugin.RepairInterop;
+        Styling.Text($"stage {repair.StageName} ({repair.Repaired} done, {repair.Remaining} left)", repair.Running ? Styling.AccentAmber : Styling.TextSecondary);
+        if (repair.LastError != null)
+            Styling.TextWrapped($"last error: {repair.LastError}", Styling.AccentRose);
+        if (repair.LastResult != null)
+            Styling.TextWrapped($"last result: {repair.LastResult}", Styling.AccentMint);
+
+        // Live, not cached: this is what proves the inventory offsets and the selected-vessel pointer are right.
+        var liveFc = plugin.Fleet.CurrentFreeCompanyId;
+        if (liveFc != 0 && plugin.Fleet.Store.TryGet(liveFc, out var liveRecord))
+        {
+            foreach (var v in liveRecord.Vessels)
+            {
+                var live = Core.Game.WorkshopReader.ReadCondition(v);
+                var selected = Core.Game.WorkshopReader.IsSelected(v.Type, v.Slot);
+                Styling.Text($"  {v.Type} {v.Slot} {v.Name}: condition [{string.Join(", ", live)}] · selected = {selected?.ToString() ?? "unknown"}",
+                    live.Any(c => c == 0) ? Styling.AccentRose : Styling.TextDim);
+            }
+        }
+        else
+        {
+            Styling.Text("Not in a workshop.", Styling.TextMuted);
+        }
+
+        Styling.VSpace(8f);
         Styling.SectionLabel("Planner addon");
         var interop = plugin.PlannerInterop;
         if (!interop.IsPlannerOpen)

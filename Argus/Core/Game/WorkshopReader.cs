@@ -1,5 +1,6 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
+using Argus.Core.Data;
 using Argus.Core.Model;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
@@ -78,6 +79,7 @@ internal static unsafe class WorkshopReader
                     v.Points.Add(p);
             }
 
+            v.Condition = ReadCondition(v);
             result.Add(v);
         }
 
@@ -88,7 +90,7 @@ internal static unsafe class WorkshopReader
             if (d.RankId == 0)
                 continue;
 
-            result.Add(new Vessel
+            var airship = new Vessel
             {
                 FreeCompanyId = fcId,
                 Type = VesselType.Airship,
@@ -109,10 +111,86 @@ internal static unsafe class WorkshopReader
                 Range = d.Range,
                 Favor = d.Favor,
                 LastSeenUtc = nowUtc,
-            });
+            };
+            airship.Condition = ReadCondition(airship);
+            result.Add(airship);
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Condition of each installed part, 0-30000, or -1 for a slot that could not be read. Parts are inventory items: a
+    /// submarine's sit in HousingInteriorPlacedItems2 from slot*5, an airship's in HousingInteriorPlacedItems1 from
+    /// 30 + slot*5 (AutoRetainer's layout). A slot holding anything but the part the vessel reports stays unknown rather
+    /// than trusted, which also catches an offset that is wrong.
+    /// </summary>
+    public static int[] ReadCondition(Vessel vessel)
+    {
+        var result = new[] { -1, -1, -1, -1 };
+        var manager = InventoryManager.Instance();
+        if (manager == null)
+            return result;
+
+        var container = manager->GetInventoryContainer(vessel.Type == VesselType.Airship
+            ? InventoryType.HousingInteriorPlacedItems1
+            : InventoryType.HousingInteriorPlacedItems2);
+        if (container == null)
+            return result;
+
+        var begin = (vessel.Type == VesselType.Airship ? 30 : 0) + vessel.Slot * 5;
+        for (var i = 0; i < 4; i++)
+        {
+            if (begin + i >= container->Size)
+                break;
+
+            var item = container->GetInventorySlot(begin + i);
+            var expected = PartItems.ItemFor(vessel.Type, vessel.PartRow(i));
+            if (item == null || expected == 0 || item->ItemId != expected)
+                continue;
+
+            result[i] = item->Condition;
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Whether the workshop's selected vessel is this one, or null when the game is not saying. The game points at the
+    /// submarine whose menu is open and keeps the selected airship's index, which lets a repair make sure it lands on
+    /// the vessel its button was pressed for.
+    /// </summary>
+    public static bool? IsSelected(VesselType type, int slot)
+    {
+        if (!IsWorkshopLoaded())
+            return null;
+
+        var ws = HousingManager.Instance()->WorkshopTerritory;
+        if (type == VesselType.Airship)
+        {
+            var active = ws->Airship.ActiveAirshipId;
+            if (active >= 4)
+                return null;
+            return active == slot;
+        }
+
+        var current = ws->Submersible.DataPointers[4].Value;
+        if (current == null)
+            return null;
+
+        // Matched by fields the way the planner overlay does; two candidates means the game is not telling us which.
+        var subs = ws->Submersible.Data;
+        var match = -1;
+        for (var i = 0; i < subs.Length; i++)
+        {
+            if (subs[i].RankId == 0 || subs[i].RegisterTime != current->RegisterTime || subs[i].RankId != current->RankId)
+                continue;
+            if (match >= 0)
+                return null;
+            match = i;
+        }
+
+        return match < 0 ? null : match == slot;
     }
 
     /// <summary>

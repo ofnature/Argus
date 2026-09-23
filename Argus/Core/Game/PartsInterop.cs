@@ -24,7 +24,7 @@ namespace Argus.Core.Game;
 /// </summary>
 internal sealed unsafe class PartsInterop
 {
-    private const string MenuAddon = "SelectString";
+    internal const string MenuAddon = "SelectString";
     private const string PickerAddon = "ContextIconMenu";
 
     /// <summary>
@@ -121,7 +121,7 @@ internal sealed unsafe class PartsInterop
         return new AddonMaster.SelectString(addon).Entries.Select(e => e.Text).ToList();
     }
 
-    private static AtkUnitBase* Addon(string name)
+    internal static AtkUnitBase* Addon(string name)
     {
         var ptr = Service.GameGui.GetAddonByName(name).Address;
         if (ptr == nint.Zero)
@@ -131,7 +131,7 @@ internal sealed unsafe class PartsInterop
     }
 
     /// <summary>The component window that is open, or null when none of them is.</summary>
-    private static AtkUnitBase* PartsWindow()
+    internal static AtkUnitBase* PartsWindow()
     {
         foreach (var name in PartsAddons)
         {
@@ -197,7 +197,7 @@ internal sealed unsafe class PartsInterop
     }
 
     /// <summary>Letters and digits only: the list can add quality marks and spacing the item name does not have.</summary>
-    private static string Normalise(string text)
+    internal static string Normalise(string text)
         => new(text.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
 
     private static int IndexOfPart(List<string> entries, string itemName)
@@ -312,7 +312,13 @@ internal sealed unsafe class PartsInterop
     }
 
     /// <summary>Index of the change-components entry, or -1 when it is absent or ambiguous.</summary>
-    private int FindChangeEntry()
+    private static int FindChangeEntry() => FindMenuEntry(ChangeComponents);
+
+    /// <summary>
+    /// Index of the one entry on the open vessel menu that matches <paramref name="phrases"/>, or -1 when none or more
+    /// than one does. Never falls back to a position: this menu also offers decommissioning the vessel.
+    /// </summary>
+    internal static int FindMenuEntry(string[] phrases)
     {
         var addon = Addon(MenuAddon);
         if (addon == null)
@@ -323,11 +329,10 @@ internal sealed unsafe class PartsInterop
         foreach (var entry in menu.Entries)
         {
             var text = entry.Text.Trim().ToLowerInvariant();
-            if (ChangeComponents.Any(c => text == c || text.Contains(c)))
+            if (phrases.Any(c => text == c || text.Contains(c)))
                 matches.Add(entry.Index);
         }
 
-        // Never fall back to a position: this menu also offers decommissioning the vessel.
         return matches.Count == 1 ? matches[0] : -1;
     }
 

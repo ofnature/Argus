@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using Argus.Core.Calc;
@@ -53,7 +53,7 @@ internal sealed class ArgusIpc : IDisposable
         lastError = pi.GetIpcProvider<string>("Argus.LastError");
 
         apiVersion.RegisterFunc(() => ApiVersion);
-        isBusy.RegisterFunc(() => plugin.PlannerInterop.Applying || plugin.PartsInterop.Running);
+        isBusy.RegisterFunc(() => plugin.PlannerInterop.Applying || plugin.PartsInterop.Running || plugin.RepairInterop.Running);
         getFleet.RegisterFunc(GetFleet);
         suggestRoute.RegisterFunc(SuggestRoute);
         applyRoute.RegisterFunc(ApplyRoute);
