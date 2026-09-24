@@ -166,31 +166,46 @@ internal static unsafe class WorkshopReader
             return null;
 
         var ws = HousingManager.Instance()->WorkshopTerritory;
+        var selectedSub = SelectedSubmarine(ws);
         if (type == VesselType.Airship)
         {
+            // Seen in game: the submarine pointer is set while a sub's menu is open and cleared while an airship's is,
+            // but ActiveAirshipId has never been seen to reset. A selected sub therefore means no airship is selected,
+            // whatever slot ActiveAirshipId still holds.
+            if (selectedSub != null)
+                return false;
+
             var active = ws->Airship.ActiveAirshipId;
             if (active >= 4)
                 return null;
             return active == slot;
         }
 
+        return selectedSub == null ? null : selectedSub == slot;
+    }
+
+    /// <summary>
+    /// Slot of the submarine the workshop has selected, or null when none is or the game is ambiguous about which.
+    /// Matched by fields the way the planner overlay does.
+    /// </summary>
+    private static int? SelectedSubmarine(WorkshopTerritory* ws)
+    {
         var current = ws->Submersible.DataPointers[4].Value;
         if (current == null)
             return null;
 
-        // Matched by fields the way the planner overlay does; two candidates means the game is not telling us which.
         var subs = ws->Submersible.Data;
-        var match = -1;
+        int? match = null;
         for (var i = 0; i < subs.Length; i++)
         {
             if (subs[i].RankId == 0 || subs[i].RegisterTime != current->RegisterTime || subs[i].RankId != current->RankId)
                 continue;
-            if (match >= 0)
+            if (match != null)
                 return null;
             match = i;
         }
 
-        return match < 0 ? null : match == slot;
+        return match;
     }
 
     /// <summary>
