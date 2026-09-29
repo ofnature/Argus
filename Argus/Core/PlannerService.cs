@@ -172,7 +172,7 @@ internal sealed class PlannerService : IDisposable
 
         var parts = string.Join(" and ", broken.Select(s => Build.SlotName(vessel.Type, s).ToLowerInvariant()));
         return $"{vessel.Name}'s {parts} {(broken.Count == 1 ? "is" : "are")} broken, so the game will not send it. "
-               + "Repair from the Vessels page.";
+               + "Repair it from its menu on the Voyage Control Panel, where Argus shows a button, or the Vessels page.";
     }
 
     /// <summary>

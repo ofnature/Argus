@@ -146,41 +146,7 @@ internal static class VesselsSection
             Styling.Text($"{Build.SlotName(v.Type, slot)} {(c < 0 ? "?" : $"{percent}%")}", color);
         }
 
-        var broken = v.BrokenSlots();
-        var repair = plugin.RepairInterop;
-        var rowId = "repair:" + Configuration.VesselKey(v);
-        if (broken.Count > 0)
-        {
-            var cost = RepairInterop.Cost(plugin.Data, v, broken);
-            var kits = PartsInterop.Carried(Supplies.MagitekRepairMaterialsItem);
-            var blocker = kits < cost ? $"needs {cost} Magitek Repair Materials, carrying {kits}"
-                : repair.Blocker(v, plugin.PartsInterop.Running);
-
-            var label = $"Repair {broken.Count} part{(broken.Count == 1 ? string.Empty : "s")} ({cost} kits)";
-            if (Buttons.Action(label, blocker == null, 200f * scale, Styling.AccentAmber))
-            {
-                Service.Log.Information("Argus: repair pressed for {Vessel}, slots {Slots}", v.Name, string.Join(",", broken));
-                if (!repair.Start(plugin.Data, v, plugin.PartsInterop.Running, rowId))
-                    Service.Log.Information("Argus: repair refused: {Reason}", repair.LastError ?? repair.LastResult ?? "unknown");
-            }
-
-            if (blocker != null)
-            {
-                ImGui.SameLine();
-                Styling.Text(blocker, Styling.TextMuted);
-            }
-        }
-
-        // Only the card that asked: the interop's state is global, and every card would otherwise claim the result.
-        if (repair.LastRunId != rowId)
-            return;
-
-        if (repair.Running)
-            Styling.Text($"Repairing… {repair.Repaired} done, {repair.Remaining} to go ({repair.StageName})", Styling.PulseColor(Styling.AccentAmber, Styling.AccentAmberSoft));
-        else if (repair.LastError != null)
-            Styling.TextWrapped(repair.LastError, Styling.AccentRose);
-        else if (repair.LastResult != null)
-            Styling.Text(repair.LastResult, Styling.AccentMint);
+        RepairControls.Draw(plugin, v, 200f * scale);
     }
 
     private static void DrawBar(float fraction, float width, Vector4 color)

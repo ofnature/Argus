@@ -35,6 +35,7 @@ public sealed class Plugin : IDalamudPlugin
 
     private readonly WindowSystem windowSystem = new("Argus");
     private readonly PlannerOverlay plannerOverlay;
+    private readonly RepairOverlay repairOverlay;
     private readonly DtrStatus dtr;
     private readonly LootHook lootHook;
     private readonly ArgusIpc ipc;
@@ -62,8 +63,10 @@ public sealed class Plugin : IDalamudPlugin
 
         MainWindow = new MainWindow(this);
         plannerOverlay = new PlannerOverlay(this);
+        repairOverlay = new RepairOverlay(this);
         windowSystem.AddWindow(MainWindow);
         windowSystem.AddWindow(plannerOverlay);
+        windowSystem.AddWindow(repairOverlay);
 
         dtr = new DtrStatus(Fleet, Config, () => MainWindow.IsOpen = true);
         ipc = new ArgusIpc(this);
@@ -142,6 +145,7 @@ public sealed class Plugin : IDalamudPlugin
         windowSystem.RemoveAllWindows();
         MainWindow.Dispose();
         plannerOverlay.Dispose();
+        repairOverlay.Dispose();
         Planner.Dispose();
 
         ClientVoyageMath.Uninstall();

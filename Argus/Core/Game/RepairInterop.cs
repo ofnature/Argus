@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using Argus.Core.Calc;
@@ -120,6 +120,18 @@ internal sealed unsafe class RepairInterop
     }
 
     private static string[] EntryFor(VesselType type) => type == VesselType.Airship ? AirshipEntry : SubmarineEntry;
+
+    /// <summary>Whether the open menu is a vessel's own menu, told by its repair entry.</summary>
+    public static bool IsVesselMenu(VesselType type) => PartsInterop.FindMenuEntry(EntryFor(type)) >= 0;
+
+    /// <summary>Screen rectangle of the open vessel menu, for docking a panel beside it.</summary>
+    public static (float X, float Y, float W, float H)? MenuRect()
+    {
+        var addon = PartsInterop.Addon(PartsInterop.MenuAddon);
+        if (addon == null)
+            return null;
+        return (addon->X, addon->Y, addon->GetScaledWidth(true), addon->GetScaledHeight(true));
+    }
 
     /// <summary>Magitek Repair Materials a repair of these slots takes: each part has a fixed cost, whatever its condition.</summary>
     public static int Cost(GameData data, Vessel vessel, IEnumerable<int> slots)
