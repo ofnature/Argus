@@ -136,12 +136,13 @@ internal sealed class PlannerService : IDisposable
         => Vessel is { } v && plugin.Config.PlannerFor(v).UnlockFocus && AutoStep != null;
 
     /// <summary>
-    /// Null unless the selected vessel has nowhere to go: four vessels can be out at once per Free Company, so a
-    /// route still plans and applies, but the game will not send it until one of the others is back.
+    /// Null unless the vessel has nowhere to go: four vessels can be out at once per Free Company, so a route still
+    /// plans and applies, but the game will not send it until one of the others is back.
     /// </summary>
-    public string? VoyageSlotWarning(DateTime nowUtc)
+    public string? VoyageSlotWarning(DateTime nowUtc) => VoyageSlotWarning(Vessel, nowUtc);
+
+    public string? VoyageSlotWarning(Vessel? vessel, DateTime nowUtc)
     {
-        var vessel = Vessel;
         if (vessel == null || vessel.IsOut(nowUtc))
             return null;
 
@@ -155,12 +156,13 @@ internal sealed class PlannerService : IDisposable
     }
 
     /// <summary>
-    /// Null unless the selected vessel has a broken part. The game refuses the voyage ("One or more components require
-    /// repairs"), so the route still plans, but the part has to be repaired before it can be sent.
+    /// Null unless the vessel has a broken part. The game refuses the voyage when Deploy is pressed ("One or more
+    /// components require repairs"), so the route still plans, but the part has to be repaired before it can be sent.
     /// </summary>
-    public string? RepairWarning()
+    public string? RepairWarning() => RepairWarning(Vessel);
+
+    public string? RepairWarning(Vessel? vessel)
     {
-        var vessel = Vessel;
         if (vessel == null)
             return null;
 
@@ -172,6 +174,13 @@ internal sealed class PlannerService : IDisposable
         return $"{vessel.Name}'s {parts} {(broken.Count == 1 ? "is" : "are")} broken, so the game will not send it. "
                + "Repair from the Vessels page.";
     }
+
+    /// <summary>
+    /// Why the game would refuse to send this vessel right now, or null when it would go. Pressing Deploy anyway only
+    /// earns a refusal in chat, once per press.
+    /// </summary>
+    public string? DeployRefusal(Vessel vessel, DateTime nowUtc)
+        => RepairWarning(vessel) ?? VoyageSlotWarning(vessel, nowUtc);
 
     /// <summary>All must-includes that will be sent to the search: manual ones plus the auto step.</summary>
     public HashSet<uint> EffectiveMustInclude()

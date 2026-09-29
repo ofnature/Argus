@@ -199,13 +199,16 @@ public sealed class PlannerOverlay : Window, IDisposable
         var canApply = route != null && !planner.Computing && !interop.Applying;
         var half = (ImGui.GetContentRegionAvail().X - 6f * scale) * 0.5f;
 
+        // The game refuses a voyage with a broken part or no free slot, once per Deploy press; the warnings above say why.
+        var refusal = cfg.DeployAfterApply ? planner.DeployRefusal(vessel, DateTime.UtcNow) : null;
+        var deploy = cfg.DeployAfterApply && refusal == null;
         var label = interop.Deploying ? "Deploying…"
             : interop.Applying ? "Applying…"
-            : cfg.DeployAfterApply ? "Apply and deploy"
+            : deploy ? "Apply and deploy"
             : "Apply route";
-        if (Buttons.Action(label, canApply, half, cfg.DeployAfterApply ? Styling.AccentAmber : Styling.AccentTeal))
+        if (Buttons.Action(label, canApply, half, deploy ? Styling.AccentAmber : Styling.AccentTeal))
         {
-            if (!interop.ApplyRoute(data, vessel.Type, route!.Sectors, cfg.DeployAfterApply))
+            if (!interop.ApplyRoute(data, vessel.Type, route!.Sectors, deploy))
                 Service.Log.Information("Argus: apply refused: {Reason}", interop.LastError ?? "unknown");
         }
 
@@ -224,6 +227,8 @@ public sealed class PlannerOverlay : Window, IDisposable
 
         if (interop.LastError != null)
             Styling.TextWrapped(interop.LastError, Styling.AccentRose);
+        else if (refusal != null)
+            Styling.TextWrapped("Apply selects the sectors only: the game would refuse this voyage.", Styling.TextMuted);
         else
             Styling.TextWrapped(cfg.DeployAfterApply
                 ? "Apply selects the sectors, then deploys."

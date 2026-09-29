@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -50,6 +50,9 @@ internal sealed unsafe class PlannerInterop
     private bool confirmClicked;
 
     public string? LastError { get; private set; }
+
+    /// <summary>Record why a request was turned down before it reached the planner, so IPC callers can read it.</summary>
+    public void Refuse(string reason) => LastError = reason;
 
     public bool Applying => pending.Count > 0 || deployStage != DeployStage.None;
 

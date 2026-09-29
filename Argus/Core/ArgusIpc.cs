@@ -261,6 +261,13 @@ internal sealed class ArgusIpc : IDisposable
         if (vessel == null)
             return false;
 
+        // Same guard as the overlay: a deploy the game will refuse is not attempted, and the caller is told why.
+        if (request.Deploy && plugin.Planner.DeployRefusal(vessel, DateTime.UtcNow) is { } refusal)
+        {
+            plugin.PlannerInterop.Refuse(refusal);
+            return false;
+        }
+
         return plugin.PlannerInterop.ApplyRoute(plugin.Data, vessel.Type, request.Sectors, request.Deploy);
     }
 
