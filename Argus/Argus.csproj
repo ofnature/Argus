@@ -3,7 +3,7 @@
   <PropertyGroup>
     <AssemblyName>Argus</AssemblyName>
     <RootNamespace>Argus</RootNamespace>
-    <Version>0.1.1</Version>
+    <Version>0.1.2</Version>
     <DalamudLibPath>$(AppData)\XIVLauncher\addon\Hooks\dev\</DalamudLibPath>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>

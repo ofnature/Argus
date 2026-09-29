@@ -14,7 +14,7 @@ namespace Argus;
 
 public sealed class Plugin : IDalamudPlugin
 {
-    public const string PluginVersion = "0.1.1";
+    public const string PluginVersion = "0.1.2";
 
     private const string CommandName = "/argus";
 
