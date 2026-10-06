@@ -1,4 +1,4 @@
-using Argus.Core.Calc;
+﻿using Argus.Core.Calc;
 using Argus.Core.Data;
 using Argus.Core.Model;
 
@@ -296,6 +296,39 @@ public class RouteSearchTests
         var req = Request(bronco, new uint[] { 0, 1 }, must: new uint[] { 7 });
         Assert.NotEmpty(RouteSearch.Issues(data, req));
         Assert.Empty(RouteSearch.FindTop(data, req, 3));
+    }
+
+    [Fact]
+    public void TooFewTanksForAnyVoyageIsExplained()
+    {
+        var bronco = GameDataFixture.Bronco(data, 1);
+        var cheapest = RouteSearch.CheapestFuel(data, Request(bronco, new uint[] { 0, 1 }));
+        Assert.True(cheapest > 0);
+
+        // One tank short of the cheapest voyage: no route, and the issue says why.
+        var broke = Request(bronco, new uint[] { 0, 1 }, fuel: cheapest - 1);
+        Assert.Empty(RouteSearch.FindTop(data, broke, 3));
+        Assert.Contains(RouteSearch.Issues(data, broke), i => i.Contains("ceruleum tanks") && i.Contains($"needs {cheapest}"));
+
+        // Exactly enough: a route, and no fuel issue.
+        var enough = Request(bronco, new uint[] { 0, 1 }, fuel: cheapest);
+        Assert.NotEmpty(RouteSearch.FindTop(data, enough, 3));
+        Assert.DoesNotContain(RouteSearch.Issues(data, enough), i => i.Contains("ceruleum tanks"));
+
+        // Not counted yet: no claim either way.
+        Assert.DoesNotContain(RouteSearch.Issues(data, Request(bronco, new uint[] { 0, 1 })), i => i.Contains("ceruleum tanks"));
+    }
+
+    [Fact]
+    public void MustIncludeSectorsSetTheFuelFloor()
+    {
+        var bronco = GameDataFixture.Bronco(data, 1);
+        var both = Request(bronco, new uint[] { 0, 1 }, must: new uint[] { 0, 1 });
+        var need = RouteSearch.CheapestFuel(data, both);
+        Assert.Equal(data.Sector(VesselType.Airship, 0).Fuel + data.Sector(VesselType.Airship, 1).Fuel, need);
+
+        var shortBy = Request(bronco, new uint[] { 0, 1 }, must: new uint[] { 0, 1 }, fuel: need - 1);
+        Assert.Contains(RouteSearch.Issues(data, shortBy), i => i.Contains("must include") && i.Contains($"need {need}"));
     }
 
     [Fact]

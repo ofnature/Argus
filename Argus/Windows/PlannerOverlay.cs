@@ -160,7 +160,11 @@ public sealed class PlannerOverlay : Window, IDisposable
         }
         else if (route == null)
         {
-            Styling.Text("No route fits. Open Argus to adjust.", Styling.TextMuted);
+            // Say why when the search knows (too few tanks, a must-include it cannot take), not just that it failed.
+            if (planner.Issues.Count == 0)
+                Styling.Text("No route fits. Open Argus to adjust.", Styling.TextMuted);
+            foreach (var issue in planner.Issues)
+                Styling.TextWrapped(issue, Styling.AccentRose);
         }
         else
         {
@@ -195,6 +199,9 @@ public sealed class PlannerOverlay : Window, IDisposable
 
         if (planner.RepairWarning() is { } repair)
             Styling.TextWrapped(repair, Styling.AccentAmber);
+
+        if (planner.TankWarning() is { } lowTanks)
+            Styling.TextWrapped(lowTanks, Styling.AccentAmber);
 
         Styling.VSpace(4f);
         var interop = plugin.PlannerInterop;

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -102,7 +102,28 @@ public static class RouteSearch
                 issues.Add($"{s.Name} is not unlocked yet.");
         }
 
+        // The search drops every route the tanks cannot fuel; when that is all of them, say so instead of nothing.
+        if (req.FuelAvailable >= 0 && CheapestFuel(data, req) is var cheapest && cheapest > req.FuelAvailable)
+        {
+            issues.Add(req.MustInclude.Count > 0
+                ? $"Not enough ceruleum tanks: carrying {req.FuelAvailable}, and the sectors this voyage must include need {cheapest}."
+                : $"Not enough ceruleum tanks: carrying {req.FuelAvailable}, and the cheapest voyage needs {cheapest}.");
+        }
+
         return issues;
+    }
+
+    /// <summary>
+    /// Fuel of the cheapest voyage the request allows: the must-include sectors together, or else the cheapest single
+    /// sector the vessel may visit. 0 when nothing is visitable, which leaves the other issues to explain it.
+    /// </summary>
+    public static int CheapestFuel(GameData data, RouteRequest req)
+    {
+        if (req.MustInclude.Count > 0)
+            return req.MustInclude.Sum(id => data.Sectors(req.Type).TryGetValue(id, out var s) ? s.Fuel : 0);
+
+        var candidates = Candidates(data, req);
+        return candidates.Count == 0 ? 0 : candidates.Min(s => s.Fuel);
     }
 
     /// <summary>Sectors the vessel may visit right now.</summary>

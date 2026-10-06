@@ -421,6 +421,9 @@ internal static class PlannerSection
         if (planner.RepairWarning() is { } repair)
             Styling.TextWrapped("⚠ " + repair, Styling.AccentAmber);
 
+        if (planner.TankWarning() is { } tanks)
+            Styling.TextWrapped("⚠ " + tanks, Styling.AccentAmber);
+
         foreach (var issue in planner.Issues)
             Styling.Text("⚠ " + issue, Styling.AccentRose);
 

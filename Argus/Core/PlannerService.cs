@@ -176,6 +176,26 @@ internal sealed class PlannerService : IDisposable
     }
 
     /// <summary>
+    /// Null unless the ceruleum tanks on hand will not cover the fleet's next dispatches: every submarine's current
+    /// route, with this vessel on the route it is about to take. The same check the Overview's supplies line makes,
+    /// so it warns while a route still fits, before the search runs out of routes it can fuel.
+    /// </summary>
+    public string? TankWarning()
+    {
+        var vessel = Vessel;
+        var fc = Company;
+        var route = ChosenRoute;
+        if (vessel == null || fc == null || route == null || fc.CeruleumTanks < 0)
+            return null;
+
+        var chosen = new Dictionary<(VesselType, int), uint[]> { [(vessel.Type, vessel.Slot)] = route.Sectors };
+        var report = Supplies.Evaluate(plugin.Data, fc, chosen);
+        return report.TanksShort
+            ? $"Low on ceruleum tanks: {report.Tanks} left, and the fleet's next dispatches need {report.TanksForNextDispatch}."
+            : null;
+    }
+
+    /// <summary>
     /// Why the game would refuse to send this vessel right now, or null when it would go. Pressing Deploy anyway only
     /// earns a refusal in chat, once per press.
     /// </summary>
