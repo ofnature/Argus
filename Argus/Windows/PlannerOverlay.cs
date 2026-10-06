@@ -171,7 +171,10 @@ public sealed class PlannerOverlay : Window, IDisposable
             }
 
             var exp = route.ExpUsed(useAverage);
-            Styling.Text($"{Formatting.VoyageLength(route.Duration)} · {route.Distance} range · {route.Fuel} fuel", Styling.TextSecondary);
+            // Tanks on hand as the route search counts them: the player's inventory, read while in the workshop.
+            var tanks = planner.Company?.CeruleumTanks ?? -1;
+            var fuel = tanks >= 0 ? $"{route.Fuel} of {Formatting.Number(tanks)} tanks" : $"{route.Fuel} fuel";
+            Styling.Text($"{Formatting.VoyageLength(route.Duration)} · {route.Distance} range · {fuel}", Styling.TextSecondary);
             Styling.Text($"{Formatting.Number(exp)} EXP · {Formatting.Number((long)route.ExpPerHour(useAverage))}/h", Styling.TextSecondary);
             if (prefs.FarmItem != 0)
             {
