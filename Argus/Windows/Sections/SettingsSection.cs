@@ -27,6 +27,31 @@ internal static class SettingsSection
             changed |= g.Toggle("Open Argus when entering a workshop", null, ref cfg.OpenOnWorkshopEnter);
         }
 
+        using (var g = SettingsGroup.Begin("Share over the LAN"))
+        {
+            changed |= g.Toggle("Share the fleet with other PCs",
+                "Through Daedalus's LAN relay, both ways: every game client with this on, and Daedalus's LAN enabled, sends the vessels it knows and takes newer readings from the others. Timers, builds, part condition and supplies, with FC tags and character names; nothing else.",
+                ref cfg.ShareFleetOverLan);
+
+            if (cfg.ShareFleetOverLan)
+            {
+                var sync = plugin.FleetSync;
+                var now = System.DateTime.UtcNow;
+                if (sync.DaedalusMissing)
+                {
+                    g.Note("Daedalus is not loaded, so nothing is being shared.", Styling.AccentRose);
+                }
+                else
+                {
+                    var sent = sync.LastSentUtc == default ? "nothing sent yet" : $"last sent {Formatting.Duration(now - sync.LastSentUtc)} ago";
+                    var heard = sync.Received == 0
+                        ? "nothing received yet (is Daedalus's LAN on, here and on the other PC?)"
+                        : $"{sync.Received} received, last {Formatting.Duration(now - sync.LastReceivedUtc)} ago";
+                    g.Note($"{sent} · {heard}");
+                }
+            }
+        }
+
         var companies = plugin.Fleet.Store.Companies.ToList();
         if (companies.Count > 0)
         {

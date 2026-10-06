@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Argus.Core.Calc;
 using Argus.Core.Model;
@@ -48,6 +48,9 @@ public sealed class Configuration : IPluginConfiguration
 
     // Planner overlay docked to the in-game voyage window
     public bool ShowPlannerOverlay = true;
+
+    /// <summary>Share the fleet with other game clients over Daedalus's LAN relay, both ways. Off until asked for.</summary>
+    public bool ShareFleetOverLan;
 
     /// <summary>
     /// Tick on the overlay: after Apply has selected every sector, press Deploy and confirm. Off by default, and it

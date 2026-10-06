@@ -111,6 +111,60 @@ internal sealed class FleetStore
         }
     }
 
+    /// <summary>
+    /// File a vessel another client shared over the LAN, when its reading is newer than this one's; an older or equal
+    /// reading is ignored, so a client's own reads always win while it stands in the workshop. The FC record takes the
+    /// sender's tag and world if this client has never seen that FC, and the supplies if they were counted more
+    /// recently. Returns true when the store changed.
+    /// </summary>
+    public bool MergeRemote(FleetSyncMessage message)
+    {
+        lock (gate)
+        {
+            var remote = message.ToVessel();
+            var record = GetOrCreate(message.Fc);
+            var changed = false;
+
+            if (record.Tag.Length == 0 && message.Tag.Length > 0)
+            {
+                record.Tag = message.Tag;
+                record.World = message.World;
+                record.CharacterName = message.Character;
+                changed = true;
+            }
+
+            var index = record.Vessels.FindIndex(remote.SameIdentity);
+            if (index < 0)
+            {
+                record.Vessels.Add(remote);
+                record.Vessels.Sort((a, b) => a.Type != b.Type ? a.Type.CompareTo(b.Type) : a.Slot.CompareTo(b.Slot));
+                changed = true;
+            }
+            else if (remote.LastSeenUtc > record.Vessels[index].LastSeenUtc)
+            {
+                // Same rule as a local read: a part the sender could not read keeps this client's reading.
+                remote.KeepConditionFrom(record.Vessels[index]);
+                record.Vessels[index] = remote;
+                changed = true;
+            }
+
+            if (message.Tanks >= 0 && message.Kits >= 0 && message.SuppliesSeenUtc > record.SuppliesSeenUtc)
+            {
+                record.CeruleumTanks = message.Tanks;
+                record.MagitekRepairMaterials = message.Kits;
+                record.SuppliesSeenUtc = message.SuppliesSeenUtc;
+                changed = true;
+            }
+
+            if (remote.LastSeenUtc > record.LastSeenUtc)
+                record.LastSeenUtc = remote.LastSeenUtc;
+
+            if (changed)
+                dirty = true;
+            return changed;
+        }
+    }
+
     public void MarkDirty()
     {
         lock (gate)
