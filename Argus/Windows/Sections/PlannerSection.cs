@@ -111,6 +111,7 @@ internal static class PlannerSection
     /// <summary>What a vessel's planner is set up to do, in a few words.</summary>
     internal static string ModeLabel(PlannerPrefs prefs)
         => prefs.UnlockFocus ? "unlock"
+            : prefs.FarmGil ? "farm gil"
             : prefs.FarmItem != 0 ? $"farm {Sheets.ItemName(prefs.FarmItem)}"
             : prefs.Goal == RouteGoal.ExpPerVoyage ? "EXP/voyage"
             : "EXP/hour";
@@ -168,7 +169,10 @@ internal static class PlannerSection
         changed |= ToggleInline("Unlock focus", ref prefs.UnlockFocus,
             "Plan for discovering the next sector instead of EXP. Discovery is a roll on every survey of the progression sector, so this picks the shortest voyage through it and the Builder ranks parts by surveillance tier there, favor above its line (double-dip = a second roll) and speed. Needs Progression on.");
         if (prefs.UnlockFocus && !unlockWas)
+        {
             prefs.FarmItem = 0;
+            prefs.FarmGil = false;
+        }
 
         Styling.VSpace(4f);
         changed |= DrawFarmPicker(plugin, vessel, prefs);
@@ -177,7 +181,39 @@ internal static class PlannerSection
 
     private static string itemFilter = string.Empty;
 
-    /// <summary>Pick an item to farm. Choosing one ranks routes by expected units of it instead of EXP.</summary>
+    /// <summary>
+    /// Where this map's gil is for this build, and how much more the top loot tier with optimal retrieval would bring:
+    /// submarine gil is mostly salvage, which only the richer pools carry and whose quantity scales with retrieval.
+    /// </summary>
+    private static void DrawGilSources(Plugin plugin, Build build)
+    {
+        var prices = Sheets.VendorPrices;
+        var sectors = plugin.Data.DestinationsOf(VesselType.Submarine, plugin.Planner.Map)
+            .Select(s => (Sector: s,
+                          Now: ItemYield.GilPerVisit(VesselType.Submarine, s.Id, build.Surveillance, build.Retrieval, prices),
+                          Top: ItemYield.GilPerVisit(VesselType.Submarine, s.Id, int.MaxValue, int.MaxValue, prices)))
+            .ToList();
+
+        static string List(IEnumerable<(SectorInfo Sector, double Gil)> items)
+            => string.Join(" · ", items.Select(x => $"{x.Sector.Letter} ≈{Formatting.Number((long)x.Gil)}"));
+
+        var now = sectors.Where(x => x.Now >= 1000).OrderByDescending(x => x.Now).Take(5).ToList();
+        Styling.TextWrapped(now.Count == 0
+            ? "Nothing on this map pays much at this build's surveillance and retrieval."
+            : $"Gil per visit with this build: {List(now.Select(x => (x.Sector, x.Now)))}.",
+            now.Count == 0 ? Styling.AccentRose : Styling.AccentMint);
+
+        // Only worth saying where the top tier pays clearly more than this build reaches.
+        var more = sectors.Where(x => x.Top >= 10000 && x.Top >= x.Now * 1.5).OrderByDescending(x => x.Top).Take(5).ToList();
+        if (more.Count > 0)
+            Styling.TextWrapped($"At the top loot tier with optimal retrieval: {List(more.Select(x => (x.Sector, x.Top)))}.", Styling.AccentAmberSoft);
+
+        Styling.TextWrapped("Valued at what an NPC vendor pays. Salvaged accessories, where most submarine gil is, sell only to vendors; the market board is not used.", Styling.TextMuted);
+    }
+
+    private const string GilLabel = "gil (vendor value)";
+
+    /// <summary>Pick an item to farm, or gil. Either ranks routes by its expected yield instead of EXP.</summary>
     private static bool DrawFarmPicker(Plugin plugin, Vessel vessel, PlannerPrefs prefs)
     {
         var planner = plugin.Planner;
@@ -194,7 +230,8 @@ internal static class PlannerSection
         Styling.Text("Farm", Styling.TextDim);
         ImGui.SameLine();
 
-        var label = prefs.FarmItem == 0 ? "nothing (plan for EXP)" : Sheets.ItemName(prefs.FarmItem);
+        var farmsGil = PlannerService.FarmsGil(prefs, vessel.Type);
+        var label = farmsGil ? GilLabel : prefs.FarmItem == 0 ? "nothing (plan for EXP)" : Sheets.ItemName(prefs.FarmItem);
         ImGui.SetNextItemWidth(320f * scale);
         using (var combo = ImRaii.Combo("##planner_farm", label))
         {
@@ -203,9 +240,19 @@ internal static class PlannerSection
                 ImGui.SetNextItemWidth(-1);
                 ImGui.InputTextWithHint("##farm_filter", "search", ref itemFilter, 64);
 
-                if (ImGui.Selectable("nothing (plan for EXP)", prefs.FarmItem == 0))
+                if (ImGui.Selectable("nothing (plan for EXP)", prefs.FarmItem == 0 && !farmsGil))
                 {
                     prefs.FarmItem = 0;
+                    prefs.FarmGil = false;
+                    changed = true;
+                }
+
+                // Airships have no drop rates, so there is nothing to weigh their loot's value by.
+                if (vessel.Type == VesselType.Submarine && ImGui.Selectable(GilLabel, farmsGil))
+                {
+                    prefs.FarmGil = true;
+                    prefs.FarmItem = 0;
+                    prefs.UnlockFocus = false;
                     changed = true;
                 }
 
@@ -222,19 +269,21 @@ internal static class PlannerSection
                     if (!ImGui.Selectable($"{name}##farm{id}", prefs.FarmItem == id))
                         continue;
                     prefs.FarmItem = id;
+                    prefs.FarmGil = false;
                     prefs.UnlockFocus = false;
                     changed = true;
                 }
             }
         }
 
-        if (prefs.FarmItem == 0)
+        if (prefs.FarmItem == 0 && !farmsGil)
             return changed;
 
         ImGui.SameLine();
         if (Buttons.Icon(FontAwesomeIcon.Times, "##farm_clear", 24f * scale, "Stop farming"))
         {
             prefs.FarmItem = 0;
+            prefs.FarmGil = false;
             changed = true;
         }
 
@@ -242,6 +291,12 @@ internal static class PlannerSection
         try { build = Build.From(data, vessel); } catch (KeyNotFoundException) { }
         if (build == null)
             return changed;
+
+        if (farmsGil)
+        {
+            DrawGilSources(plugin, build);
+            return changed;
+        }
 
         // The surveillance band each tier occupies, so the number to build toward is visible either way.
         var windows = ItemYield.Windows(data, vessel.Type, planner.Map, prefs.FarmItem);
@@ -478,6 +533,12 @@ internal static class PlannerSection
             var line = $"{Formatting.VoyageLength(r.Duration)} · {r.Distance}/{build?.Range ?? 0} range · {r.Fuel} fuel · " +
                        $"{Formatting.Number(exp)} EXP ({Formatting.Number(r.Exp.Guaranteed)}–{Formatting.Number(r.Exp.Maximum)}) · {Formatting.Number((long)perHour)}/h";
             Styling.Text(line, Styling.TextSecondary);
+
+            if (PlannerService.FarmsGil(prefs, vessel.Type))
+            {
+                Styling.Text($"≈{Formatting.Number((long)r.Gil)} gil per voyage · {Formatting.Number((long)(r.GilPerHour * 24))} per day (vendor value)",
+                    r.Gil > 0 ? Styling.AccentMint : Styling.TextMuted);
+            }
 
             if (prefs.FarmItem != 0)
             {

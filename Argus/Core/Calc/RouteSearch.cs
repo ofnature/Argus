@@ -32,7 +32,9 @@ public sealed record RouteRequest(
     bool IgnoreUnlocks = false,
     int MaxSectors = VoyageMath.MaxSectorsPerVoyage,
     /// <summary>Rank by expected units of this item instead of EXP. 0 plans for EXP.</summary>
-    uint TargetItem = 0);
+    uint TargetItem = 0,
+    /// <summary>Rank by expected vendor gil, each drop valued at these prices. Null plans for EXP or the target item.</summary>
+    IReadOnlyDictionary<uint, int>? Prices = null);
 
 public sealed record RouteResult(
     uint[] Sectors,
@@ -41,9 +43,12 @@ public sealed record RouteResult(
     int Fuel,
     RouteExp Exp,
     double Score,
-    double ItemUnits = 0)
+    double ItemUnits = 0,
+    double Gil = 0)
 {
     public double ItemUnitsPerHour => Duration.TotalHours <= 0 ? 0 : ItemUnits / Duration.TotalHours;
+
+    public double GilPerHour => Duration.TotalHours <= 0 ? 0 : Gil / Duration.TotalHours;
 
     public uint ExpUsed(bool average) => Exp.For(average);
     public double ExpPerHour(bool average) => Duration.TotalHours <= 0 ? 0 : ExpUsed(average) / Duration.TotalHours;
@@ -67,6 +72,9 @@ public sealed class LegTables
 
     /// <summary>Expected units of the request's target item per visit; all zero when not farming.</summary>
     public required double[] ItemUnits { get; init; }
+
+    /// <summary>Expected vendor gil per visit; all zero unless the request carries prices.</summary>
+    public required double[] Gil { get; init; }
 
     public int Count => Points.Length - 1;
 }
@@ -166,6 +174,7 @@ public static class RouteSearch
         var expA = new uint[n + 1];
         var expM = new uint[n + 1];
         var units = new double[n + 1];
+        var gil = new double[n + 1];
         for (var i = 1; i <= n; i++)
         {
             var s = points[i];
@@ -178,12 +187,14 @@ public static class RouteSearch
             expM[i] = e.Maximum;
             if (req.TargetItem != 0)
                 units[i] = ItemYield.PerVisit(req.Type, s.Id, req.TargetItem, req.Build.Surveillance, req.Build.Retrieval);
+            if (req.Prices != null)
+                gil[i] = ItemYield.GilPerVisit(req.Type, s.Id, req.Build.Surveillance, req.Build.Retrieval, req.Prices);
         }
 
         return new LegTables
         {
             Points = points, Distance = dist, Seconds = secs, SurveyDistance = surveyDist, SurveySeconds = surveySecs,
-            Fuel = fuel, ExpGuaranteed = expG, ExpAverage = expA, ExpMaximum = expM, ItemUnits = units,
+            Fuel = fuel, ExpGuaranteed = expG, ExpAverage = expA, ExpMaximum = expM, ItemUnits = units, Gil = gil,
         };
     }
 
@@ -234,6 +245,7 @@ public static class RouteSearch
                 var f = 0;
                 ulong g = 0, a = 0, m = 0;
                 var units = 0.0;
+                var gil = 0.0;
                 foreach (var i in r.Order)
                 {
                     f += t.Fuel[i];
@@ -241,20 +253,21 @@ public static class RouteSearch
                     a += t.ExpAverage[i];
                     m += t.ExpMaximum[i];
                     units += t.ItemUnits[i];
+                    gil += t.Gil[i];
                 }
 
                 var exp = new RouteExp((uint)g, (uint)a, (uint)m);
                 var duration = TimeSpan.FromSeconds(r.Seconds + VoyageMath.FixedVoyageSeconds);
                 var used = useAverage ? a : g;
-                // Farming ranks by expected units of the target item; the goal still chooses per-hour vs per-voyage.
-                var metric = req.TargetItem != 0 ? units : used;
+                // Farming ranks by expected gil or units of the target item; the goal still chooses per-hour vs per-voyage.
+                var metric = req.Prices != null ? gil : req.TargetItem != 0 ? units : used;
                 var score = req.Goal switch
                 {
                     RouteGoal.ExpPerHour => metric / duration.TotalHours,
                     RouteGoal.ShortestVoyage => 1e9 / Math.Max(1.0, duration.TotalSeconds),
                     _ => metric,
                 };
-                return (Result: new RouteResult(r.Order.Select(i => t.Points[i].Id).ToArray(), r.Distance, duration, f, exp, score, units), Seconds: r.Seconds, Fuel: f);
+                return (Result: new RouteResult(r.Order.Select(i => t.Points[i].Id).ToArray(), r.Distance, duration, f, exp, score, units, gil), Seconds: r.Seconds, Fuel: f);
             })
             .Where(x => x.Seconds + VoyageMath.FixedVoyageSeconds <= capSeconds)
             .Where(x => req.FuelAvailable < 0 || x.Fuel <= req.FuelAvailable)

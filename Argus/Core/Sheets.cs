@@ -1,5 +1,7 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
+using Argus.Core.Data;
+using Argus.Core.Model;
 using Lumina.Excel;
 using Lumina.Excel.Sheets;
 
@@ -46,6 +48,19 @@ internal static class Sheets
         LastSubmarineRank = SubmarineRanks.Last(r => r.Capacity != 0).RowId;
         LastAirshipRank = AirshipLevels.Last(r => r.Capacity != 0).RowId;
     }
+
+    private static Dictionary<uint, int>? vendorPrices;
+
+    /// <summary>
+    /// What an NPC vendor pays for each item a submarine can bring back (Item.PriceLow), for gil farming. Built on
+    /// first use. Vendor value, not the market board: the salvaged accessories that carry submarine gil sell only to
+    /// vendors.
+    /// </summary>
+    public static IReadOnlyDictionary<uint, int> VendorPrices
+        => vendorPrices ??= LootTable.Items(VesselType.Submarine)
+            .Select(id => (Id: id, Price: (int)(Items.GetRowOrDefault(id)?.PriceLow ?? 0)))
+            .Where(x => x.Price > 0)
+            .ToDictionary(x => x.Id, x => x.Price);
 
     public static string ItemName(uint itemId)
         => Items.GetRowOrDefault(itemId)?.Name.ExtractText() ?? $"Item {itemId}";

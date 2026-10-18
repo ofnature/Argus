@@ -140,7 +140,7 @@ public sealed class PlannerOverlay : Window, IDisposable
             badge = true;
         }
 
-        if (prefs.FarmItem != 0)
+        if (prefs.FarmItem != 0 || PlannerService.FarmsGil(prefs, vessel.Type))
         {
             if (badge)
                 ImGui.SameLine(0, 4f * scale);
@@ -180,6 +180,9 @@ public sealed class PlannerOverlay : Window, IDisposable
             var fuel = tanks >= 0 ? $"{route.Fuel} of {Formatting.Number(tanks)} tanks" : $"{route.Fuel} fuel";
             Styling.Text($"{Formatting.VoyageLength(route.Duration)} · {route.Distance} range · {fuel}", Styling.TextSecondary);
             Styling.Text($"{Formatting.Number(exp)} EXP · {Formatting.Number((long)route.ExpPerHour(useAverage))}/h", Styling.TextSecondary);
+            if (PlannerService.FarmsGil(prefs, vessel.Type))
+                Styling.Text($"≈{Formatting.Number((long)route.Gil)} gil per voyage (vendor value)", route.Gil > 0 ? Styling.AccentMint : Styling.TextMuted);
+
             if (prefs.FarmItem != 0)
             {
                 Styling.TextWrapped(vessel.Type == VesselType.Submarine

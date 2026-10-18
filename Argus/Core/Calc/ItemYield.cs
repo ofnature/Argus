@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using Argus.Core.Data;
 using Argus.Core.Model;
@@ -39,9 +39,37 @@ public static class ItemYield
         if (!drop.HasRates)
             return 1;
 
-        var retrievalTier = RetrievalTier(thresholds, retrieval);
+        return Units(drop, RetrievalTier(thresholds, retrieval));
+    }
+
+    /// <summary>Expected units of a rated drop per draw: its chance times the middle of its quantity range.</summary>
+    private static double Units(LootDrop drop, int retrievalTier)
+    {
         var (min, max) = drop.Range(retrievalTier < 0 ? 1 : retrievalTier);
         return drop.Chance * ((min + max) / 2.0);
+    }
+
+    /// <summary>
+    /// Expected vendor gil from one visit to a submarine sector: every item the reached loot pool can drop, at its
+    /// chance and the build's retrieval quantity, valued at <paramref name="prices"/>. Same one-draw lower bound as
+    /// <see cref="PerVisit"/>. 0 for airships, which have no public drop rates to weigh their items by.
+    /// </summary>
+    public static double GilPerVisit(VesselType type, uint sector, int surveillance, int retrieval, IReadOnlyDictionary<uint, int> prices)
+    {
+        if (type != VesselType.Submarine)
+            return 0;
+
+        var thresholds = ExpModel.ThresholdsFor(type, sector);
+        var tier = PartOptimizer.SurveillanceTier(thresholds, surveillance);
+        var retrievalTier = RetrievalTier(thresholds, retrieval);
+        var gil = 0.0;
+        foreach (var drop in LootTable.Drops(type, sector, tier))
+        {
+            if (drop.HasRates && prices.TryGetValue(drop.ItemId, out var price) && price > 0)
+                gil += Units(drop, retrievalTier) * price;
+        }
+
+        return gil;
     }
 
     /// <summary>Expected units (or sources, for airships) over a whole route.</summary>

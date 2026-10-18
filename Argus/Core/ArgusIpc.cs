@@ -93,6 +93,9 @@ internal sealed class ArgusIpc : IDisposable
         public int CapHours = -1;
         public uint[]? MustInclude;
         public uint TargetItem;
+
+        /// <summary>Rank by expected vendor gil instead (submarines only).</summary>
+        public bool FarmGil;
         public bool IgnoreUnlocks;
         public int Count = 5;
     }
@@ -224,7 +227,8 @@ internal sealed class ArgusIpc : IDisposable
             fc?.CeruleumTanks ?? -1,
             request.IgnoreUnlocks,
             VoyageMath.MaxSectorsPerVoyage,
-            request.TargetItem);
+            request.FarmGil ? 0u : request.TargetItem,
+            request.FarmGil && vessel.Type == VesselType.Submarine ? Sheets.VendorPrices : null);
 
         var issues = RouteSearch.Issues(plugin.Data, routeRequest);
         var results = RouteSearch.FindTop(plugin.Data, routeRequest, Math.Clamp(request.Count, 1, 20));
@@ -247,6 +251,7 @@ internal sealed class ArgusIpc : IDisposable
                 Exp = r.Exp.Guaranteed,
                 ExpMax = r.Exp.Maximum,
                 r.ItemUnits,
+                Gil = (long)r.Gil,
             }),
         });
     }

@@ -33,6 +33,12 @@ public sealed class PlannerPrefs
     /// <summary>Item the planner is farming for; 0 plans for EXP. Mutually exclusive with <see cref="UnlockFocus"/>.</summary>
     public uint FarmItem;
 
+    /// <summary>
+    /// Farm for gil: rank submarine routes by expected vendor value of everything they bring back. Mutually exclusive
+    /// with <see cref="FarmItem"/> and <see cref="UnlockFocus"/>; ignored for airships, which have no drop rates.
+    /// </summary>
+    public bool FarmGil;
+
     public PlannerPrefs Clone() => (PlannerPrefs)MemberwiseClone();
 }
 

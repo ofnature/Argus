@@ -331,6 +331,55 @@ public class RouteSearchTests
         Assert.Contains(RouteSearch.Issues(data, shortBy), i => i.Contains("must include") && i.Contains($"need {need}"));
     }
 
+    /// <summary>The salvaged accessories' vendor prices (Item.PriceLow); in game these come from the item sheet.</summary>
+    private static readonly Dictionary<uint, int> SalvagePrices = new()
+    {
+        [22500] = 8000, [22501] = 9000, [22502] = 10000, [22503] = 13000,
+        [22504] = 27000, [22505] = 28500, [22506] = 30000, [22507] = 34500,
+    };
+
+    [Fact]
+    public void GilPerVisitFollowsTheLootTierAndRetrieval()
+    {
+        const uint derelictJ = 10;
+
+        // Tier 3 at J is almost all Extravagant salvage, 4-5 per draw at optimal retrieval.
+        var top = ItemYield.GilPerVisit(VesselType.Submarine, derelictJ, int.MaxValue, int.MaxValue, SalvagePrices);
+        Assert.InRange(top, 100_000, 150_000);
+
+        // Poor retrieval brings one piece instead of four or five.
+        var poorRetrieval = ItemYield.GilPerVisit(VesselType.Submarine, derelictJ, int.MaxValue, 0, SalvagePrices);
+        Assert.InRange(poorRetrieval, top / 6, top / 3);
+
+        // The lowest tier has no salvage at all.
+        Assert.True(ItemYield.GilPerVisit(VesselType.Submarine, derelictJ, 0, int.MaxValue, SalvagePrices) < 1000);
+
+        // Airships have no drop rates to weigh value by.
+        Assert.Equal(0, ItemYield.GilPerVisit(VesselType.Airship, 0, int.MaxValue, int.MaxValue, SalvagePrices));
+    }
+
+    [Fact]
+    public void GilModeRanksTheSalvageSectorsFirst()
+    {
+        var sub = Build.From(data, VesselType.Submarine, 145, 23, 24, 21, 22);
+        var all = data.DestinationsOf(VesselType.Submarine, 1).Select(s => s.Id).ToHashSet();
+        var req = new RouteRequest(VesselType.Submarine, 1, sub, all, new HashSet<uint>(), RouteGoal.ExpPerVoyage, null, false,
+            Prices: SalvagePrices);
+
+        var best = RouteSearch.FindBest(data, req);
+        Assert.NotNull(best);
+        Assert.True(best.Gil > 0);
+
+        // J (unidentified derelict) and O (Wreckage of Discovery I) carry the most salvage on map 1.
+        Assert.Contains(10u, best.Sectors);
+        Assert.Contains(15u, best.Sectors);
+
+        // Planning for EXP still reports no gil: it is only computed when asked for.
+        var expBest = RouteSearch.FindBest(data, req with { Prices = null });
+        Assert.NotNull(expBest);
+        Assert.Equal(0, expBest.Gil);
+    }
+
     [Fact]
     public void SubmarineFullMapSearchFinishesQuickly()
     {
