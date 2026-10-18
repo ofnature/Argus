@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using Argus.Core.Model;
@@ -126,6 +126,131 @@ public static class PartOptimizer
             .ThenBy(c => c.Build.Cost)
             .Take(count)
             .ToList();
+    }
+
+    /// <summary>A build and the gil route it would fly with it.</summary>
+    public sealed record GilCandidate(Build Build, uint[] Route, int Distance, TimeSpan Duration, double Gil)
+    {
+        public double GilPerDay => Duration.TotalHours <= 0 ? 0 : Gil * 24.0 / Duration.TotalHours;
+    }
+
+    /// <summary>
+    /// Builds ranked by vendor gil, each with its own route. Unlike the other rankings this does not take the planner's
+    /// route, because a gil build changes which route is possible: range decides how many salvage sectors fit in a
+    /// voyage and surveillance which loot pool each rolls on. For every build it picks the best set of this map's gil
+    /// sectors that it reaches at <paramref name="minTier"/> or better (as <see cref="SurveillanceTier"/> counts:
+    /// 2 = the tier 3 pool) and can fly, scored per hour or per voyage by <paramref name="goal"/>.
+    /// </summary>
+    public static List<GilCandidate> BestForGil(GameData data, int rank, uint map, IReadOnlySet<uint> allowedSectors,
+        IReadOnlyDictionary<uint, int> prices, int minTier, RouteGoal goal, int count = 10, IReadOnlySet<uint>? allowedParts = null)
+    {
+        const VesselType type = VesselType.Submarine;
+        var start = data.StartFor(type, map);
+
+        // Sectors worth a visit for gil at their best, richest first; capped so the sets stay few.
+        var gilSectors = data.DestinationsOf(type, map)
+            .Where(s => allowedSectors.Contains(s.Id) && s.RankReq <= rank)
+            .Select(s => (Sector: s, Top: ItemYield.GilPerVisit(type, s.Id, int.MaxValue, int.MaxValue, prices)))
+            .Where(x => x.Top >= 1000)
+            .OrderByDescending(x => x.Top)
+            .Take(8)
+            .Select(x => x.Sector)
+            .ToList();
+        if (gilSectors.Count == 0)
+            return new List<GilCandidate>();
+
+        var thresholds = gilSectors.Select(s => ExpModel.ThresholdsFor(type, s.Id)).ToArray();
+
+        // Every set of up to five, each in its shortest order. Distance does not depend on the build, so once.
+        var sets = new List<(int Mask, SectorInfo[] Order, int Distance)>();
+        for (var mask = 1; mask < 1 << gilSectors.Count; mask++)
+        {
+            var members = Enumerable.Range(0, gilSectors.Count).Where(i => (mask & (1 << i)) != 0).Select(i => gilSectors[i]).ToArray();
+            if (members.Length > VoyageMath.MaxSectorsPerVoyage)
+                continue;
+
+            SectorInfo[]? best = null;
+            var bestDistance = int.MaxValue;
+            foreach (var order in Permutations(members))
+            {
+                var d = VoyageMath.RouteDistance(start, order);
+                if (d < bestDistance)
+                {
+                    bestDistance = d;
+                    best = order;
+                }
+            }
+
+            sets.Add((mask, best!, bestDistance));
+        }
+
+        // Voyage time depends only on speed, which many builds share.
+        var durations = new Dictionary<(int Mask, int Speed), TimeSpan>();
+        var results = new List<(GilCandidate Candidate, double Score)>();
+        foreach (var build in AllBuilds(data, type, rank, allowedParts))
+        {
+            var gil = new double[gilSectors.Count];
+            var eligible = 0;
+            for (var i = 0; i < gilSectors.Count; i++)
+            {
+                if (SurveillanceTier(thresholds[i], build.Surveillance) < minTier)
+                    continue;
+                gil[i] = ItemYield.GilPerVisit(type, gilSectors[i].Id, build.Surveillance, build.Retrieval, prices);
+                if (gil[i] > 0)
+                    eligible |= 1 << i;
+            }
+
+            (GilCandidate Candidate, double Score)? best = null;
+            foreach (var (mask, order, distance) in sets)
+            {
+                if ((mask & ~eligible) != 0 || distance > build.Range)
+                    continue;
+
+                if (!durations.TryGetValue((mask, build.Speed), out var duration))
+                {
+                    duration = VoyageMath.RouteDuration(start, order, build.Speed);
+                    durations[(mask, build.Speed)] = duration;
+                }
+
+                var total = 0.0;
+                for (var i = 0; i < gilSectors.Count; i++)
+                {
+                    if ((mask & (1 << i)) != 0)
+                        total += gil[i];
+                }
+
+                var score = goal == RouteGoal.ExpPerHour ? total / Math.Max(0.01, duration.TotalHours) : total;
+                if (best == null || score > best.Value.Score || (score == best.Value.Score && duration < best.Value.Candidate.Duration))
+                    best = (new GilCandidate(build, order.Select(s => s.Id).ToArray(), distance, duration, total), score);
+            }
+
+            if (best != null)
+                results.Add(best.Value);
+        }
+
+        return results
+            .OrderByDescending(x => x.Score)
+            .ThenBy(x => x.Candidate.Build.Cost)
+            .ThenBy(x => x.Candidate.Duration)
+            .Take(count)
+            .Select(x => x.Candidate)
+            .ToList();
+    }
+
+    private static IEnumerable<SectorInfo[]> Permutations(SectorInfo[] items)
+    {
+        if (items.Length <= 1)
+        {
+            yield return items;
+            yield break;
+        }
+
+        for (var i = 0; i < items.Length; i++)
+        {
+            var rest = items.Where((_, j) => j != i).ToArray();
+            foreach (var tail in Permutations(rest))
+                yield return [items[i], .. tail];
+        }
     }
 
     /// <summary>Surveillance tier a build reaches at a sector: 2 = tier 3 pool, 1 = tier 2 pool, 0 = base.</summary>

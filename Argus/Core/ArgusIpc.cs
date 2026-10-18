@@ -113,6 +113,15 @@ internal sealed class ArgusIpc : IDisposable
         public string? Goal;
         public uint UnlockSector;
         public int Count = 5;
+
+        /// <summary>Rank builds by vendor gil, each with its own route; no Route needed (submarines only).</summary>
+        public bool FarmGil;
+
+        /// <summary>Loot tier gil builds must reach at every sector they visit: 3 richest, 2, or 1 for any.</summary>
+        public int GilTier = 3;
+
+        /// <summary>Map for gil builds; defaults to the vessel's current route's map.</summary>
+        public uint Map;
     }
 
     private sealed class ApplyBuildDto : VesselRef
@@ -286,6 +295,10 @@ internal sealed class ArgusIpc : IDisposable
         if (vessel == null)
             return Fail("vessel not found");
 
+        // Gil builds choose their own route, so they need none from the caller.
+        if (request.FarmGil && vessel.Type == VesselType.Submarine)
+            return SuggestGilBuilds(vessel, request);
+
         var route = request.Route is { Length: > 0 }
             ? request.Route
             : plugin.Planner.ChosenRoute?.Sectors ?? vessel.Points.ToArray();
@@ -308,7 +321,26 @@ internal sealed class ArgusIpc : IDisposable
         return JsonConvert.SerializeObject(new { Ok = true, Vessel = vessel.Name, Rank = rank, Builds = builds });
     }
 
-    private object Describe(Vessel vessel, Build build, int distance, TimeSpan duration, RouteExp exp)
+    private string SuggestGilBuilds(Vessel vessel, BuildRequestDto request)
+    {
+        var data = plugin.Data;
+        var prefs = plugin.Config.PlannerFor(vessel);
+        var rank = request.Rank > 0 ? request.Rank : vessel.Rank;
+        var map = request.Map != 0 ? request.Map : vessel.Points.Count > 0 ? data.MapOf(vessel.Type, vessel.Points[0]) : 1;
+        var allowed = !prefs.IgnoreUnlocks && plugin.Fleet.Store.TryGet(vessel.FreeCompanyId, out var fc)
+            ? plugin.Planner.Unlocked(fc, vessel.Type)
+            : data.DestinationsOf(vessel.Type, map).Select(s => s.Id).ToHashSet();
+        var goal = Enum.TryParse<RouteGoal>(request.Goal, true, out var parsed) ? parsed : prefs.Goal;
+        var minTier = Math.Clamp(request.GilTier, 1, 3) - 1;
+
+        var builds = PartOptimizer.BestForGil(data, rank, map, allowed, Sheets.VendorPrices, minTier, goal, Math.Clamp(request.Count, 1, 20))
+            .Select(c => Describe(vessel, c.Build, c.Distance, c.Duration,
+                ExpModel.Route(c.Build, c.Route.Select(id => data.Sector(vessel.Type, id)).ToList()), c.Route, c.Gil));
+
+        return JsonConvert.SerializeObject(new { Ok = true, Vessel = vessel.Name, Rank = rank, Map = map, Builds = builds });
+    }
+
+    private object Describe(Vessel vessel, Build build, int distance, TimeSpan duration, RouteExp exp, uint[]? route = null, double gil = 0)
     {
         var parts = build.Parts.ToArray();
         return new
@@ -327,6 +359,10 @@ internal sealed class ArgusIpc : IDisposable
             Distance = distance,
             DurationSeconds = (int)duration.TotalSeconds,
             Exp = exp.Guaranteed,
+
+            // Gil builds only: the route each one would fly and its expected vendor gil per voyage.
+            Route = route,
+            Gil = (long)gil,
         };
     }
 

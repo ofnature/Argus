@@ -39,6 +39,12 @@ public sealed class PlannerPrefs
     /// </summary>
     public bool FarmGil;
 
+    /// <summary>
+    /// Loot tier the Builder's gil builds must reach at every sector they visit: 3 = the richest pool (Extravagant
+    /// salvage on map 1), 2 = tier 2 or better, 1 = any. Per vessel like the rest.
+    /// </summary>
+    public int GilTier = 3;
+
     public PlannerPrefs Clone() => (PlannerPrefs)MemberwiseClone();
 }
 

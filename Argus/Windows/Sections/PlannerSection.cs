@@ -206,7 +206,7 @@ internal static class PlannerSection
         // Only worth saying where the top tier pays clearly more than this build reaches.
         var more = sectors.Where(x => x.Top >= 10000 && x.Top >= x.Now * 1.5).OrderByDescending(x => x.Top).Take(5).ToList();
         if (more.Count > 0)
-            Styling.TextWrapped($"At the top loot tier with optimal retrieval: {List(more.Select(x => (x.Sector, x.Top)))}.", Styling.AccentAmberSoft);
+            Styling.TextWrapped($"At the top loot tier with optimal retrieval: {List(more.Select(x => (x.Sector, x.Top)))}. The Builder finds builds that reach it, each with its route.", Styling.AccentAmberSoft);
 
         Styling.TextWrapped("Valued at what an NPC vendor pays. Salvaged accessories, where most submarine gil is, sell only to vendors; the market board is not used.", Styling.TextMuted);
     }

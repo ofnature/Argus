@@ -381,6 +381,55 @@ public class RouteSearchTests
     }
 
     [Fact]
+    public void GilBuildsPickTheirOwnRouteAtTheChosenTier()
+    {
+        var all = data.DestinationsOf(VesselType.Submarine, 1).Select(s => s.Id).ToHashSet();
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var builds = PartOptimizer.BestForGil(data, 145, 1, all, SalvagePrices, minTier: 2, RouteGoal.ExpPerVoyage, 5);
+        sw.Stop();
+
+        Assert.NotEmpty(builds);
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(10), $"took {sw.Elapsed}");
+        foreach (var c in builds)
+        {
+            Assert.True(c.Gil > 0);
+            Assert.True(c.Distance <= c.Build.Range);
+            Assert.True(c.Build.FitsCapacity);
+
+            // Every sector on the route is reached at the tier 3 pool, as asked.
+            Assert.All(c.Route, id => Assert.Equal(2, PartOptimizer.SurveillanceTier(ExpModel.ThresholdsFor(VesselType.Submarine, id), c.Build.Surveillance)));
+        }
+
+        // The richest salvage sectors lead the best build's route.
+        Assert.Contains(10u, builds[0].Route);
+        Assert.Contains(15u, builds[0].Route);
+
+        // Ranked best first.
+        Assert.True(builds.Zip(builds.Skip(1)).All(p => p.First.Gil >= p.Second.Gil));
+    }
+
+    [Fact]
+    public void GilBuildsComeBackEmptyWhenNoBuildReachesTheTier()
+    {
+        // Rank 1 parts cannot reach the tier 3 pool anywhere, and J and O need rank 20 and 30 anyway.
+        var all = data.DestinationsOf(VesselType.Submarine, 1).Select(s => s.Id).ToHashSet();
+        Assert.Empty(PartOptimizer.BestForGil(data, 1, 1, all, SalvagePrices, minTier: 2, RouteGoal.ExpPerVoyage));
+    }
+
+    [Fact]
+    public void GilBuildForTheCurrentPartsOnly()
+    {
+        // Restricting the parts to one set evaluates just that build, which is how the Builder shows the current one.
+        var current = Build.From(data, VesselType.Submarine, 145, 23, 24, 21, 22);
+        var parts = current.Parts.Select(p => p.Id).ToHashSet();
+        var all = data.DestinationsOf(VesselType.Submarine, 1).Select(s => s.Id).ToHashSet();
+
+        var only = PartOptimizer.BestForGil(data, 145, 1, all, SalvagePrices, minTier: 0, RouteGoal.ExpPerVoyage, 10, parts);
+        Assert.Single(only);
+        Assert.Equal(current.Identifier, only[0].Build.Identifier);
+    }
+
+    [Fact]
     public void SubmarineFullMapSearchFinishesQuickly()
     {
         var sub = Build.From(data, VesselType.Submarine, 145, 23, 24, 21, 22);

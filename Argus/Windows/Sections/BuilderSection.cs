@@ -24,6 +24,10 @@ internal static class BuilderSection
     private static List<PartOptimizer.UnlockCandidate> unlockResults = new();
     private static List<PartOptimizer.ItemCandidate> itemResults = new();
     private static int targetRank;
+    private static string gilSignature = string.Empty;
+    private static List<PartOptimizer.GilCandidate> gilResults = new();
+    private static PartOptimizer.GilCandidate? gilCurrent;
+    private static readonly string[] GilTierLabels = { "Any loot tier", "Tier 2 loot or better", "Tier 3 loot (richest)" };
 
     public static void Draw(Plugin plugin)
     {
@@ -38,6 +42,15 @@ internal static class BuilderSection
             return;
         }
 
+        var prefs = plugin.Config.PlannerFor(vessel);
+
+        // Gil builds choose their own route, so they need none from the planner.
+        if (PlannerService.FarmsGil(prefs, vessel.Type))
+        {
+            DrawGil(plugin, vessel, prefs);
+            return;
+        }
+
         var route = planner.ChosenRoute?.Sectors
                     ?? (vessel.Type == VesselType.Submarine && vessel.Points.Count > 0 ? vessel.Points.ToArray() : null);
         if (route == null || route.Length == 0)
@@ -47,7 +60,6 @@ internal static class BuilderSection
         }
 
         var scale = ImGuiHelpers.GlobalScale;
-        var prefs = plugin.Config.PlannerFor(vessel);
         var useAverage = prefs.AverageBonus || vessel.Type == VesselType.Airship;
         var unlock = prefs.UnlockFocus && planner.AutoStep is { } step ? step : null;
         var farmItem = unlock == null ? prefs.FarmItem : 0;
@@ -136,6 +148,111 @@ internal static class BuilderSection
             for (var i = 0; i < results.Count; i++)
                 DrawBuildRow(plugin, vessel, results[i].Build, route, useAverage, results[i], null, true, null, $"b{i}");
         }
+    }
+
+    /// <summary>
+    /// Gil farming: every build paired with the route it would fly, the best set of this map's gil sectors it reaches
+    /// at the chosen loot tier and has the range for. A build that adds range or reaches a richer pool thereby shows
+    /// the route that makes it worth installing.
+    /// </summary>
+    private static void DrawGil(Plugin plugin, Vessel vessel, PlannerPrefs prefs)
+    {
+        var planner = plugin.Planner;
+        var data = plugin.Data;
+        var scale = ImGuiHelpers.GlobalScale;
+        if (targetRank == 0)
+            targetRank = vessel.Rank;
+
+        var perDay = prefs.Goal == RouteGoal.ExpPerHour;
+        Styling.Text($"{vessel.Name} · map {planner.Map} · ", Styling.TextSecondary);
+        ImGui.SameLine(0, 0);
+        Pill.Draw("FARM GIL", Styling.AccentMint, 0.72f);
+        Styling.TextWrapped($"Each build comes with the route it would fly: the best set of this map's gil sectors it reaches at the loot tier below and has the range for, ranked by vendor gil per {(perDay ? "day" : "voyage")} (the planner's goal). Retrieval sets how many pieces a find brings back: 1 at poor, 2 at normal, 4-5 at optimal.", Styling.TextDim);
+
+        ImGui.SetNextItemWidth(120f * scale);
+        ImGui.InputInt("Build for rank", ref targetRank);
+        targetRank = Math.Clamp(targetRank, 1, data.LastRank(vessel.Type));
+        Styling.Tooltip("Parts unlock by rank and capacity grows with it; plan ahead for the rank you are levelling towards.");
+
+        ImGui.SameLine(0, 18f * scale);
+        var tierIndex = Math.Clamp(prefs.GilTier, 1, 3) - 1;
+        ImGui.SetNextItemWidth(200f * scale);
+        using (var combo = ImRaii.Combo("Reach", GilTierLabels[tierIndex]))
+        {
+            if (combo.Success)
+            {
+                for (var i = GilTierLabels.Length - 1; i >= 0; i--)
+                {
+                    if (!ImGui.Selectable(GilTierLabels[i], i == tierIndex) || i == tierIndex)
+                        continue;
+                    prefs.GilTier = i + 1;
+                    plugin.Config.Save();
+                }
+            }
+        }
+
+        Styling.Tooltip("Only sectors a build reaches at this loot tier or richer count towards its route. Salvage sits in the richer pools, so tier 3 is where most of the gil is; a lower tier finds cheaper builds.");
+
+        var minTier = Math.Clamp(prefs.GilTier, 1, 3) - 1;
+        var fc = planner.Company;
+        var allowed = prefs.IgnoreUnlocks || fc == null
+            ? data.DestinationsOf(VesselType.Submarine, planner.Map).Select(s => s.Id).ToHashSet()
+            : planner.Unlocked(fc, VesselType.Submarine);
+        var prices = Sheets.VendorPrices;
+        var useAverage = prefs.AverageBonus;
+
+        Build? current = null;
+        try { current = Build.From(data, vessel); } catch (KeyNotFoundException) { }
+
+        // Both searches walk every set of gil sectors, which in game calls the client's voyage functions: run them when
+        // something they depend on changes, never per frame.
+        var currentKey = current == null ? string.Empty : $"{vessel.Rank}:{string.Join(",", current.Parts.Select(p => p.Id))}";
+        var sig = $"gil|{targetRank}|{planner.Map}|{minTier}|{prefs.Goal}|{currentKey}|{string.Join(",", allowed.OrderBy(x => x))}";
+        if (sig != gilSignature)
+        {
+            gilSignature = sig;
+            gilResults = PartOptimizer.BestForGil(data, targetRank, planner.Map, allowed, prices, minTier, prefs.Goal, 10);
+            gilCurrent = current == null
+                ? null
+                : PartOptimizer.BestForGil(data, vessel.Rank, planner.Map, allowed, prices, minTier, prefs.Goal, 1,
+                    current.Parts.Select(p => p.Id).ToHashSet()).FirstOrDefault();
+        }
+
+        if (current != null)
+        {
+            Styling.VSpace(4f);
+            Styling.SectionLabel("Current build");
+            if (gilCurrent != null)
+                DrawBuildRow(plugin, vessel, current, gilCurrent.Route, useAverage, null, null, false, null, "current", GilLine(data, gilCurrent));
+            else
+                Styling.TextWrapped($"The current build reaches no gil sector on this map at {GilTierLabels[minTier].ToLowerInvariant()} within its range.", Styling.AccentRose);
+        }
+
+        Styling.VSpace(6f);
+        Styling.SectionLabel("Builds for gil");
+        if (gilResults.Count == 0)
+        {
+            Styling.TextWrapped($"No build at rank {targetRank} reaches {GilTierLabels[minTier].ToLowerInvariant()} at a gil sector the FC can visit on this map. Try a lower loot tier or a higher rank.", Styling.TextMuted);
+            return;
+        }
+
+        for (var i = 0; i < gilResults.Count; i++)
+        {
+            var c = gilResults[i];
+            DrawBuildRow(plugin, vessel, c.Build, c.Route, useAverage, null, null, true, null, $"g{i}", GilLine(data, c), i == 0 ? "BEST FOR GIL" : null);
+        }
+    }
+
+    /// <summary>"Route OJ · ≈195,491 gil per voyage · ≈168,178 per day · optimal retrieval throughout".</summary>
+    private static string GilLine(GameData data, PartOptimizer.GilCandidate c)
+    {
+        var letters = string.Concat(c.Route.Select(id => data.Sector(VesselType.Submarine, id).Letter));
+        var below = c.Route
+            .Where(id => ItemYield.RetrievalTier(ExpModel.ThresholdsFor(VesselType.Submarine, id), c.Build.Retrieval) < 2)
+            .Select(id => data.Sector(VesselType.Submarine, id).Letter)
+            .ToList();
+        var retrieval = below.Count == 0 ? "optimal retrieval throughout" : $"retrieval below optimal at {string.Join(", ", below)}";
+        return $"Route {letters} · ≈{Formatting.Number((long)c.Gil)} gil per voyage · ≈{Formatting.Number((long)c.GilPerDay)} per day · {retrieval}";
     }
 
     private static void DrawBuildRow(Plugin plugin, Vessel vessel, Build build, uint[] route, bool useAverage,
