@@ -354,6 +354,9 @@ internal static class BuilderSection
         }
 
         var haveAll = true;
+        var missing = 0;
+        var stored = 0;
+        var now = DateTime.UtcNow;
         foreach (var (slot, row, item) in changes)
         {
             var name = item == 0 ? "unknown part" : Sheets.ItemName(item);
@@ -362,6 +365,21 @@ internal static class BuilderSection
             Styling.Text($"{Build.SlotName(vessel.Type, slot)} → {name}", Styling.AccentTealSoft);
             ImGui.SameLine();
             Styling.Text(carried > 0 ? $"(carrying {carried})" : "(none carried)", carried > 0 ? Styling.TextDim : Styling.AccentRose);
+
+            // Not in the bags: where Charon last saw it, on a retainer or in the FC chest.
+            if (carried > 0 || item == 0)
+                continue;
+
+            missing++;
+            var found = plugin.PartLocator.Find(item, now);
+            if (PartLocator.Describe(found, Formatting.Duration) is not { } where)
+                continue;
+
+            var located = found!.Places.Count > 0;
+            if (located)
+                stored++;
+            ImGui.SameLine();
+            Styling.Text(where, located ? Styling.AccentAmberSoft : Styling.TextMuted);
         }
 
         var blocker = parts.BlockerFor(vessel);
@@ -376,7 +394,9 @@ internal static class BuilderSection
         if (!haveAll)
         {
             ImGui.SameLine();
-            Styling.Text("craft or withdraw the missing parts first", Styling.TextMuted);
+            Styling.Text(stored == 0 ? "craft or withdraw the missing parts first"
+                : stored == missing ? "withdraw the stored parts first"
+                : "withdraw the stored parts and craft the rest first", Styling.TextMuted);
         }
         else if (blocker != null)
         {

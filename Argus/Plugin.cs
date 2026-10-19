@@ -31,6 +31,7 @@ public sealed class Plugin : IDalamudPlugin
     internal PartsInterop PartsInterop { get; }
     internal RepairInterop RepairInterop { get; }
     internal FleetSync FleetSync { get; }
+    internal PartLocator PartLocator { get; }
     internal LootStore Loot { get; }
     internal MainWindow MainWindow { get; }
 
@@ -59,6 +60,7 @@ public sealed class Plugin : IDalamudPlugin
         PartsInterop = new PartsInterop();
         RepairInterop = new RepairInterop();
         FleetSync = new FleetSync(pluginInterface, Fleet, Config);
+        PartLocator = new PartLocator(pluginInterface);
         Loot = new LootStore(Service.PluginInterface.GetPluginConfigDirectory());
         lootHook = new LootHook(this, Loot);
         lootHook.Recorded += OnLootRecorded;
