@@ -28,6 +28,10 @@ internal static class BuilderSection
     private static List<PartOptimizer.GilCandidate> gilResults = new();
     private static PartOptimizer.GilCandidate? gilCurrent;
     private static readonly string[] GilTierLabels = { "Any loot tier", "Tier 2 loot or better", "Tier 3 loot (richest)" };
+    private static readonly string[] ChangeLabels = { "Change any parts", "Change at most 1 part", "Change at most 2 parts", "Change at most 3 parts" };
+
+    /// <summary>Most parts a suggested gil build may swap from the current build; 4 = any.</summary>
+    private static int maxChanges = 4;
 
     public static void Draw(Plugin plugin)
     {
@@ -193,6 +197,23 @@ internal static class BuilderSection
 
         Styling.Tooltip("Only sectors a build reaches at this loot tier or richer count towards its route. Salvage sits in the richer pools, so tier 3 is where most of the gil is; a lower tier finds cheaper builds.");
 
+        ImGui.SameLine(0, 18f * scale);
+        var changeIndex = maxChanges >= 4 ? 0 : maxChanges;
+        ImGui.SetNextItemWidth(190f * scale);
+        using (var combo = ImRaii.Combo("##gil_changes", ChangeLabels[changeIndex]))
+        {
+            if (combo.Success)
+            {
+                for (var i = 0; i < ChangeLabels.Length; i++)
+                {
+                    if (ImGui.Selectable(ChangeLabels[i], i == changeIndex))
+                        maxChanges = i == 0 ? 4 : i;
+                }
+            }
+        }
+
+        Styling.Tooltip("Only builds that swap at most this many of the current parts: the cheapest upgrades, for when every new part has to be crafted or bought.");
+
         var minTier = Math.Clamp(prefs.GilTier, 1, 3) - 1;
         var fc = planner.Company;
         var allowed = prefs.IgnoreUnlocks || fc == null
@@ -207,11 +228,13 @@ internal static class BuilderSection
         // Both searches walk every set of gil sectors, which in game calls the client's voyage functions: run them when
         // something they depend on changes, never per frame.
         var currentKey = current == null ? string.Empty : $"{vessel.Rank}:{string.Join(",", current.Parts.Select(p => p.Id))}";
-        var sig = $"gil|{targetRank}|{planner.Map}|{minTier}|{prefs.Goal}|{currentKey}|{string.Join(",", allowed.OrderBy(x => x))}";
+        var sig = $"gil|{targetRank}|{planner.Map}|{minTier}|{prefs.Goal}|{maxChanges}|{currentKey}|{string.Join(",", allowed.OrderBy(x => x))}";
         if (sig != gilSignature)
         {
             gilSignature = sig;
-            gilResults = PartOptimizer.BestForGil(data, targetRank, planner.Map, allowed, prices, minTier, prefs.Goal, 10);
+            var currentParts = maxChanges < 4 && current != null ? current.Parts.Select(p => p.Id).ToArray() : null;
+            gilResults = PartOptimizer.BestForGil(data, targetRank, planner.Map, allowed, prices, minTier, prefs.Goal, 10,
+                currentParts: currentParts, maxChanges: maxChanges);
             gilCurrent = current == null
                 ? null
                 : PartOptimizer.BestForGil(data, vessel.Rank, planner.Map, allowed, prices, minTier, prefs.Goal, 1,
@@ -232,7 +255,9 @@ internal static class BuilderSection
         Styling.SectionLabel("Builds for gil");
         if (gilResults.Count == 0)
         {
-            Styling.TextWrapped($"No build at rank {targetRank} reaches {GilTierLabels[minTier].ToLowerInvariant()} at a gil sector the FC can visit on this map. Try a lower loot tier or a higher rank.", Styling.TextMuted);
+            Styling.TextWrapped(maxChanges < 4
+                ? $"No build that changes at most {maxChanges} part{(maxChanges == 1 ? string.Empty : "s")} reaches {GilTierLabels[minTier].ToLowerInvariant()} at a gil sector the FC can visit on this map. Allow more changes or a lower loot tier."
+                : $"No build at rank {targetRank} reaches {GilTierLabels[minTier].ToLowerInvariant()} at a gil sector the FC can visit on this map. Try a lower loot tier or a higher rank.", Styling.TextMuted);
             return;
         }
 

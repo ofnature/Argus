@@ -122,6 +122,9 @@ internal sealed class ArgusIpc : IDisposable
 
         /// <summary>Map for gil builds; defaults to the vessel's current route's map.</summary>
         public uint Map;
+
+        /// <summary>Gil builds only: most parts to swap from the vessel's current build (4 = any).</summary>
+        public int MaxChanges = 4;
     }
 
     private sealed class ApplyBuildDto : VesselRef
@@ -333,7 +336,10 @@ internal sealed class ArgusIpc : IDisposable
         var goal = Enum.TryParse<RouteGoal>(request.Goal, true, out var parsed) ? parsed : prefs.Goal;
         var minTier = Math.Clamp(request.GilTier, 1, 3) - 1;
 
-        var builds = PartOptimizer.BestForGil(data, rank, map, allowed, Sheets.VendorPrices, minTier, goal, Math.Clamp(request.Count, 1, 20))
+        var maxChanges = Math.Clamp(request.MaxChanges, 0, 4);
+        var currentParts = maxChanges < 4 ? new uint[] { vessel.Hull, vessel.Stern, vessel.Bow, vessel.Bridge } : null;
+        var builds = PartOptimizer.BestForGil(data, rank, map, allowed, Sheets.VendorPrices, minTier, goal, Math.Clamp(request.Count, 1, 20),
+                currentParts: currentParts, maxChanges: maxChanges)
             .Select(c => Describe(vessel, c.Build, c.Distance, c.Duration,
                 ExpModel.Route(c.Build, c.Route.Select(id => data.Sector(vessel.Type, id)).ToList()), c.Route, c.Gil));
 

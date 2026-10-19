@@ -139,10 +139,13 @@ public static class PartOptimizer
     /// route, because a gil build changes which route is possible: range decides how many salvage sectors fit in a
     /// voyage and surveillance which loot pool each rolls on. For every build it picks the best set of this map's gil
     /// sectors that it reaches at <paramref name="minTier"/> or better (as <see cref="SurveillanceTier"/> counts:
-    /// 2 = the tier 3 pool) and can fly, scored per hour or per voyage by <paramref name="goal"/>.
+    /// 2 = the tier 3 pool) and can fly, scored per hour or per voyage by <paramref name="goal"/>. With
+    /// <paramref name="currentParts"/> (hull, stern, bow, bridge), only builds that swap at most
+    /// <paramref name="maxChanges"/> of them are considered: the cheapest upgrades for a vessel that already has parts.
     /// </summary>
     public static List<GilCandidate> BestForGil(GameData data, int rank, uint map, IReadOnlySet<uint> allowedSectors,
-        IReadOnlyDictionary<uint, int> prices, int minTier, RouteGoal goal, int count = 10, IReadOnlySet<uint>? allowedParts = null)
+        IReadOnlyDictionary<uint, int> prices, int minTier, RouteGoal goal, int count = 10, IReadOnlySet<uint>? allowedParts = null,
+        IReadOnlyList<uint>? currentParts = null, int maxChanges = 4)
     {
         const VesselType type = VesselType.Submarine;
         var start = data.StartFor(type, map);
@@ -189,6 +192,9 @@ public static class PartOptimizer
         var results = new List<(GilCandidate Candidate, double Score)>();
         foreach (var build in AllBuilds(data, type, rank, allowedParts))
         {
+            if (currentParts != null && Changes(build, currentParts) > maxChanges)
+                continue;
+
             var gil = new double[gilSectors.Count];
             var eligible = 0;
             for (var i = 0; i < gilSectors.Count; i++)
@@ -229,12 +235,29 @@ public static class PartOptimizer
         }
 
         return results
+            // Equal hauls are common (every build that reaches the same tiers brings back the same), and between
+            // those the faster one is strictly better; capacity used earns nothing once a build fits.
             .OrderByDescending(x => x.Score)
-            .ThenBy(x => x.Candidate.Build.Cost)
             .ThenBy(x => x.Candidate.Duration)
+            .ThenBy(x => x.Candidate.Build.Cost)
             .Take(count)
             .Select(x => x.Candidate)
             .ToList();
+    }
+
+    /// <summary>How many of the four slots differ from <paramref name="current"/> (hull, stern, bow, bridge).</summary>
+    public static int Changes(Build build, IReadOnlyList<uint> current)
+    {
+        var changes = 0;
+        var i = 0;
+        foreach (var part in build.Parts)
+        {
+            if (i >= current.Count || part.Id != current[i])
+                changes++;
+            i++;
+        }
+
+        return changes;
     }
 
     private static IEnumerable<SectorInfo[]> Permutations(SectorInfo[] items)

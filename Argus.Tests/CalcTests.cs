@@ -430,6 +430,39 @@ public class RouteSearchTests
     }
 
     [Fact]
+    public void GilBuildsRespectTheChangeLimit()
+    {
+        var all = data.DestinationsOf(VesselType.Submarine, 1).Select(s => s.Id).ToHashSet();
+        var current = new uint[] { 7, 24, 21, 18 };
+
+        var one = PartOptimizer.BestForGil(data, 64, 1, all, SalvagePrices, 0, RouteGoal.ExpPerHour, 50, currentParts: current, maxChanges: 1);
+        Assert.NotEmpty(one);
+        Assert.All(one, c => Assert.True(PartOptimizer.Changes(c.Build, current) <= 1));
+
+        // No changes at all leaves only the current build.
+        var none = PartOptimizer.BestForGil(data, 64, 1, all, SalvagePrices, 0, RouteGoal.ExpPerHour, 50, currentParts: current, maxChanges: 0);
+        Assert.All(none, c => Assert.Equal(0, PartOptimizer.Changes(c.Build, current)));
+
+        // A tighter limit can only do as well or worse than a looser one.
+        var two = PartOptimizer.BestForGil(data, 64, 1, all, SalvagePrices, 0, RouteGoal.ExpPerHour, 1, currentParts: current, maxChanges: 2);
+        Assert.True(two[0].GilPerDay >= one[0].GilPerDay);
+    }
+
+    [Fact]
+    public void EqualGilBuildsRankTheFasterFirst()
+    {
+        // Per voyage, many builds bring back the same haul; between them the faster one must lead, not the one that
+        // uses less capacity.
+        var all = data.DestinationsOf(VesselType.Submarine, 1).Select(s => s.Id).ToHashSet();
+        var builds = PartOptimizer.BestForGil(data, 64, 1, all, SalvagePrices, 2, RouteGoal.ExpPerVoyage, 20);
+        foreach (var (a, b) in builds.Zip(builds.Skip(1)))
+        {
+            if (Math.Abs(a.Gil - b.Gil) < 0.5)
+                Assert.True(a.Duration <= b.Duration, $"{a.Build.Identifier} {a.Duration} before {b.Build.Identifier} {b.Duration}");
+        }
+    }
+
+    [Fact]
     public void SubmarineFullMapSearchFinishesQuickly()
     {
         var sub = Build.From(data, VesselType.Submarine, 145, 23, 24, 21, 22);
