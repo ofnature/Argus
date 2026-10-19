@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using Dalamud.Plugin;
@@ -19,7 +19,8 @@ namespace Argus.Core;
 /// </summary>
 internal sealed class PartLocator
 {
-    public sealed record Place(string Name, int Count, TimeSpan? Age);
+    /// <summary>A retainer, or an FC chest page (<paramref name="IsRetainer"/> false): Charon fetches only from retainers.</summary>
+    public sealed record Place(string Name, int Count, TimeSpan? Age, bool IsRetainer = true);
 
     public sealed record Found(IReadOnlyList<Place> Places, int RetainersKnown);
 
@@ -92,7 +93,7 @@ internal sealed class PartLocator
         {
             var count = ((int?)p["nq"] ?? 0) + ((int?)p["hq"] ?? 0);
             if (count > 0)
-                places.Add(new Place($"FC chest page {(int?)p["page"] ?? 0}", count, chestAge));
+                places.Add(new Place($"FC chest page {(int?)p["page"] ?? 0}", count, chestAge, IsRetainer: false));
         }
 
         return new Found(places, (int?)root["retainerKnown"] ?? 0);

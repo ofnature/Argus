@@ -338,6 +338,62 @@ internal static class BuilderSection
     }
 
     /// <summary>
+    /// A button that hands Charon the parts it has seen on retainers, to take out at the next summoning bell, and
+    /// Charon's progress for the card that asked. Charon arms the list; the player walks to the bell.
+    /// </summary>
+    private static void DrawFetch(Plugin plugin, List<(uint ItemId, int Quantity)> onRetainers, string rowId, DateTime now)
+    {
+        var scale = ImGuiHelpers.GlobalScale;
+        var fetch = plugin.CharonFetch;
+        var mine = fetch.LastRunId == rowId;
+        var status = mine ? fetch.Current(now) : null;
+        var active = status is { State: "waitingForPerson" or "moving" };
+
+        if (onRetainers.Count > 0 && !active)
+        {
+            var label = $"Fetch {onRetainers.Count} from retainers";
+            if (Buttons.Action(label, true, 190f * scale, Styling.AccentTeal))
+                fetch.Request(onRetainers, rowId);
+            Styling.Tooltip("Charon takes these out of the retainers it saw them on, the next time you open those retainers at a summoning bell. Nothing moves until then.");
+        }
+
+        if (!mine)
+            return;
+
+        if (fetch.LastError != null)
+        {
+            Styling.TextWrapped(fetch.LastError, Styling.AccentRose);
+            return;
+        }
+
+        if (status == null)
+            return;
+
+        switch (status.State)
+        {
+            case "waitingForPerson":
+                Styling.TextWrapped($"Charon has it: open {(status.Retainer.Length > 0 ? status.Retainer : "the retainer")} at a summoning bell{(status.Queued > 0 ? $" ({status.Queued} more part{(status.Queued == 1 ? string.Empty : "s")} after this)" : string.Empty)}.", Styling.AccentAmberSoft);
+                break;
+            case "moving":
+                Styling.Text($"Charon is taking it out of {status.Retainer}\u2026", Styling.PulseColor(Styling.AccentAmber, Styling.AccentAmberSoft));
+                break;
+            case "done":
+                Styling.Text($"Charon fetched {status.Moved}.{(status.Queued > 0 ? $" {status.Queued} still queued." : string.Empty)}", Styling.AccentMint);
+                break;
+            case "refused":
+                Styling.TextWrapped($"Charon: {status.Reason}", Styling.AccentRose);
+                break;
+        }
+
+        if (active)
+        {
+            ImGui.SameLine();
+            if (Buttons.Action("Cancel", true, 70f * scale))
+                fetch.Stop();
+        }
+    }
+
+    /// <summary>
     /// What this build would cost in parts and a button to install it. Parts are consumed from the inventory, so the
     /// carried count is shown per slot and the button stays disabled unless every part is actually in the bags.
     /// </summary>
@@ -356,6 +412,7 @@ internal static class BuilderSection
         var haveAll = true;
         var missing = 0;
         var stored = 0;
+        var onRetainers = new List<(uint ItemId, int Quantity)>();
         var now = DateTime.UtcNow;
         foreach (var (slot, row, item) in changes)
         {
@@ -378,6 +435,8 @@ internal static class BuilderSection
             var located = found!.Places.Count > 0;
             if (located)
                 stored++;
+            if (found.Places.Any(p => p.IsRetainer))
+                onRetainers.Add((item, 1));
             ImGui.SameLine();
             Styling.Text(where, located ? Styling.AccentAmberSoft : Styling.TextMuted);
         }
@@ -403,6 +462,8 @@ internal static class BuilderSection
             ImGui.SameLine();
             Styling.Text(blocker, Styling.TextMuted);
         }
+
+        DrawFetch(plugin, onRetainers, rowId, now);
 
         // Only the card that asked: the interop's state is global, and every card would otherwise claim the result.
         if (parts.LastRunId != rowId)
