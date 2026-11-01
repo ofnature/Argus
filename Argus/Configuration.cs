@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using Argus.Core.Calc;
 using Argus.Core.Model;
+using Argus.Windows.Dock;
 using Dalamud.Configuration;
 
 namespace Argus;
@@ -63,6 +64,18 @@ public sealed class Configuration : IPluginConfiguration
 
     /// <summary>Share the fleet with other game clients over Daedalus's LAN relay, both ways. Off until asked for.</summary>
     public bool ShareFleetOverLan;
+
+    /// <summary>
+    /// Pin an "Argus" tab to a screen edge, like Daedalus, Charon and Ariadne: pointing at it pops the fleet out
+    /// beside it. Off until asked for; the ordinary window still opens with /argus.
+    /// </summary>
+    public bool EdgeDockEnabled;
+
+    /// <summary>Which screen edge the tab sits on. Dragging the tab changes it.</summary>
+    public DockEdge EdgeDockEdge = DockEdge.Left;
+
+    /// <summary>Where along that edge the tab's centre sits, 0 = top or left end, 1 = the far end. Dragging changes it.</summary>
+    public float EdgeDockAlong = 0.5f;
 
     /// <summary>
     /// Tick on the overlay: after Apply has selected every sector, press Deploy and confirm. Off by default, and it

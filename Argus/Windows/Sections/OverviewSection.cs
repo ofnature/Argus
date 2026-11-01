@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -149,7 +149,8 @@ internal static class OverviewSection
             Styling.Text($"counted {Formatting.Duration(DateTime.UtcNow - fc.SuppliesSeenUtc)} ago", Styling.TextMuted);
     }
 
-    private static void DrawVesselRow(Vessel v, DateTime now, float width, bool live)
+    /// <summary>One vessel: state pill, name, rank, timer; a hover tooltip with its route. Also the edge tab's rows.</summary>
+    internal static void DrawVesselRow(Vessel v, DateTime now, float width, bool live)
     {
         var stale = live && now - v.LastSeenUtc > StaleAfter;
         var scale = ImGuiHelpers.GlobalScale;

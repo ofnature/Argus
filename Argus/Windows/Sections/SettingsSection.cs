@@ -27,6 +27,36 @@ internal static class SettingsSection
             changed |= g.Toggle("Open Argus when entering a workshop", null, ref cfg.OpenOnWorkshopEnter);
         }
 
+        using (var g = SettingsGroup.Begin("Edge tab"))
+        {
+            changed |= g.Toggle("Show an Argus tab on the screen edge",
+                "Like Daedalus, Charon and Ariadne: point at the tab and the fleet pops out beside it (every vessel's timer, voyage slots, supplies, and buttons into this window); click it to keep it out, click again to let it go. Tabs on the same edge sit side by side. This window still opens with /argus.",
+                ref cfg.EdgeDockEnabled);
+
+            if (cfg.EdgeDockEnabled)
+            {
+                g.Row("Tab edge", "Which edge of the screen the tab sits on. You can also drag the tab: let go near any edge, anywhere along it, and it stays there.", 210f, () =>
+                {
+                    var edge = (int)cfg.EdgeDockEdge;
+                    ImGui.SetNextItemWidth(110f * Dalamud.Interface.Utility.ImGuiHelpers.GlobalScale);
+                    if (ImGui.Combo("##dock_edge", ref edge, "Left\0Right\0Top\0Bottom\0"))
+                    {
+                        cfg.EdgeDockEdge = (Argus.Windows.Dock.DockEdge)edge;
+                        cfg.Save();
+                    }
+
+                    ImGui.SameLine();
+                    if (ImGui.SmallButton("Centre"))
+                    {
+                        cfg.EdgeDockAlong = 0.5f;
+                        cfg.Save();
+                    }
+
+                    Styling.Tooltip("Put the tab back in the middle of its edge.");
+                });
+            }
+        }
+
         using (var g = SettingsGroup.Begin("Share over the LAN"))
         {
             changed |= g.Toggle("Share the fleet with other PCs",

@@ -4,6 +4,7 @@ using Argus.Core.Game;
 using Argus.Core.Model;
 using Argus.Core.Store;
 using Argus.Windows;
+using Argus.Windows.Dock;
 using Dalamud.Game.Command;
 using Dalamud.Interface.Windowing;
 using Dalamud.Plugin;
@@ -38,6 +39,8 @@ public sealed class Plugin : IDalamudPlugin
 
     private readonly WindowSystem windowSystem = new("Argus");
     private readonly PlannerOverlay plannerOverlay;
+    private readonly DockLayoutShare dockLayout;
+    private readonly EdgeDockWindow edgeDock;
     private readonly RepairOverlay repairOverlay;
     private readonly DtrStatus dtr;
     private readonly LootHook lootHook;
@@ -74,6 +77,21 @@ public sealed class Plugin : IDalamudPlugin
         windowSystem.AddWindow(plannerOverlay);
         windowSystem.AddWindow(repairOverlay);
 
+        // The edge tab: the fleet at a glance behind a tab on a screen edge, at its own edge and spot (dragging
+        // stores new ones). The layout is shared with every other plugin's dock so none cover each other; tabs
+        // wanting the same spot go in order: Daedalus 10, Charon 20, Ariadne and Mercury 30, Demeter 40, Argus 50.
+        dockLayout = new DockLayoutShare(pluginInterface, "Argus", order: 50);
+        edgeDock = new EdgeDockWindow(
+            [new EdgeDockWindow.Tab("main", "Argus", () => Service.ClientState.IsLoggedIn, () => DockPanel.Draw(this), DockPanel.Width)],
+            _ => (Config.EdgeDockEdge, Config.EdgeDockAlong),
+            (_, edge, along) =>
+            {
+                (Config.EdgeDockEdge, Config.EdgeDockAlong) = (edge, along);
+                Config.Save();
+            },
+            dockLayout);
+        windowSystem.AddWindow(edgeDock);
+
         dtr = new DtrStatus(Fleet, Config, () => MainWindow.IsOpen = true);
         ipc = new ArgusIpc(this);
 
@@ -102,6 +120,7 @@ public sealed class Plugin : IDalamudPlugin
         PartsInterop.Update(now);
         RepairInterop.Update(now);
         FleetSync.Update(now);
+        edgeDock.IsOpen = Config.EdgeDockEnabled && edgeDock.AnyTab();
         dtr.Update(now);
     }
 
@@ -154,6 +173,7 @@ public sealed class Plugin : IDalamudPlugin
         MainWindow.Dispose();
         plannerOverlay.Dispose();
         repairOverlay.Dispose();
+        dockLayout.Dispose();
         Planner.Dispose();
 
         ClientVoyageMath.Uninstall();
