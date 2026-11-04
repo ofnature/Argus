@@ -46,6 +46,12 @@ public sealed class PlannerPrefs
     /// </summary>
     public int GilTier = 3;
 
+    /// <summary>
+    /// Submarines: the map this vessel was last planned on (the Planner page, or the map opened in game); 0 lets the
+    /// planner pick from its current route. Offered again beside the game's map list.
+    /// </summary>
+    public uint Map;
+
     public PlannerPrefs Clone() => (PlannerPrefs)MemberwiseClone();
 }
 

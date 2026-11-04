@@ -72,7 +72,10 @@ internal sealed class PlannerService : IDisposable
         manualMust.Clear();
         Results = Array.Empty<RouteResult>();
         Chosen = 0;
-        Map = DefaultMap(v);
+        var remembered = plugin.Config.PlannerFor(v).Map;
+        Map = v.Type == VesselType.Submarine && remembered != 0 && plugin.Data.Maps.Any(m => m.Id == remembered)
+            ? remembered
+            : DefaultMap(v);
     }
 
     public void SetMap(uint map)
@@ -83,6 +86,13 @@ internal sealed class PlannerService : IDisposable
         manualMust.Clear();
         Results = Array.Empty<RouteResult>();
         Chosen = 0;
+
+        // Remembered per vessel: the map a sub is flown on is offered again at the game's map list next time.
+        if (Vessel is { Type: VesselType.Submarine } v && plugin.Config.PlannerFor(v) is { } prefs && prefs.Map != map)
+        {
+            prefs.Map = map;
+            plugin.Config.Save();
+        }
     }
 
     public bool AddMust(uint sector)

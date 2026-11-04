@@ -39,6 +39,7 @@ public sealed class Plugin : IDalamudPlugin
 
     private readonly WindowSystem windowSystem = new("Argus");
     private readonly PlannerOverlay plannerOverlay;
+    private readonly MapSelectOverlay mapSelectOverlay;
     private readonly DockLayoutShare dockLayout;
     private readonly EdgeDockWindow edgeDock;
     private readonly RepairOverlay repairOverlay;
@@ -73,9 +74,11 @@ public sealed class Plugin : IDalamudPlugin
         MainWindow = new MainWindow(this);
         plannerOverlay = new PlannerOverlay(this);
         repairOverlay = new RepairOverlay(this);
+        mapSelectOverlay = new MapSelectOverlay(this);
         windowSystem.AddWindow(MainWindow);
         windowSystem.AddWindow(plannerOverlay);
         windowSystem.AddWindow(repairOverlay);
+        windowSystem.AddWindow(mapSelectOverlay);
 
         // The edge tab: the fleet at a glance behind a tab on a screen edge, at its own edge and spot (dragging
         // stores new ones). The layout is shared with every other plugin's dock so none cover each other; tabs
@@ -173,6 +176,7 @@ public sealed class Plugin : IDalamudPlugin
         MainWindow.Dispose();
         plannerOverlay.Dispose();
         repairOverlay.Dispose();
+        mapSelectOverlay.Dispose();
         dockLayout.Dispose();
         Planner.Dispose();
 

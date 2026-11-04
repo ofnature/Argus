@@ -1,4 +1,4 @@
-using Argus.Core.Calc;
+﻿using Argus.Core.Calc;
 using Argus.Core.Model;
 
 namespace Argus.Tests;
@@ -45,6 +45,19 @@ public class PlannerPrefsTests
         sub.DurationCapHours = 12;
         Assert.Equal(36, config.SubmarinePlanner.DurationCapHours);
         Assert.Equal(36, config.PlannerFor(Sub(1, "Nautilus")).DurationCapHours);
+    }
+
+    [Fact]
+    public void EachSubmarineRemembersItsOwnMap()
+    {
+        // A gil farmer on Deep-sea Site and a progression sub on Sea of Ash are offered their own map at the list.
+        var config = new Configuration();
+        config.PlannerFor(Sub(0, "Leviathan")).Map = 1;
+        config.PlannerFor(Sub(2, "Money_go_bye")).Map = 2;
+
+        Assert.Equal(1u, config.PlannerFor(Sub(0, "Leviathan")).Map);
+        Assert.Equal(2u, config.PlannerFor(Sub(2, "Money_go_bye")).Map);
+        Assert.Equal(0u, config.PlannerFor(Sub(1, "Nautilus")).Map);
     }
 
     [Fact]
