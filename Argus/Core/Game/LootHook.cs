@@ -111,7 +111,7 @@ internal sealed unsafe class LootHook : IDisposable
                     Type = VesselType.Submarine,
                     Slot = slot,
                     VesselName = name,
-                    Voyage = cur->RegisterTime,
+                    Voyage = VoyageId(fcId, VesselType.Submarine, slot, cur->ReturnTime, cur->RegisterTime),
                     CollectedUtc = now,
                     Rank = rank,
                     Hull = cur->HullId, Stern = cur->SternId, Bow = cur->BowId, Bridge = cur->BridgeId,
@@ -177,7 +177,7 @@ internal sealed unsafe class LootHook : IDisposable
                     Type = VesselType.Airship,
                     Slot = id,
                     VesselName = name,
-                    Voyage = a.RegisterTime,
+                    Voyage = VoyageId(fcId, VesselType.Airship, id, a.ReturnTime, a.RegisterTime),
                     CollectedUtc = now,
                     Rank = rank,
                     Hull = a.HullId, Stern = a.SternId, Bow = a.BowId, Bridge = a.BridgeId,
@@ -207,6 +207,29 @@ internal sealed unsafe class LootHook : IDisposable
             Service.Log.Information("Argus: recorded {Count} sector hauls for {Vessel}", added, entries[0].VesselName);
             Recorded?.Invoke(entries);
         }
+    }
+
+    /// <summary>
+    /// Which voyage this report is for: its return time. The game has cleared the vessel's return time by the time the
+    /// report is up (SubmarineTracker: "ReturnTime is 0 at this point"), so it is the one the store last saw, before or
+    /// after the clear. A report viewed again later ("View previous voyage log") gets the same id and is not filed
+    /// twice. A vessel this client never saw on a voyage falls back to the old key, its RegisterTime.
+    /// </summary>
+    private uint VoyageId(ulong fcId, VesselType type, int slot, uint returnTime, uint registerTime)
+    {
+        var now = (uint)DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        if (returnTime != 0 && returnTime <= now)
+            return returnTime;
+
+        if (plugin.Fleet.Store.TryGet(fcId, out var fc) && fc.Vessels.FirstOrDefault(v => v.Type == type && v.Slot == slot) is { } known)
+        {
+            if (known.ReturnTime != 0 && known.ReturnTime <= now)
+                return known.ReturnTime;
+            if (known.LastReturnTime != 0)
+                return known.LastReturnTime;
+        }
+
+        return registerTime;
     }
 
     private Build? SafeBuild(VesselType type, int rank, ushort hull, ushort stern, ushort bow, ushort bridge)

@@ -11,7 +11,11 @@ public sealed class LootEntry
     public int Slot;
     public string VesselName = string.Empty;
 
-    /// <summary>RegisterTime of the voyage — unique per vessel, so (FC, type, slot, voyage) identifies a run.</summary>
+    /// <summary>
+    /// The voyage: its return time (see <c>LootHook.VoyageId</c>), so (FC, type, slot, voyage, sector) is one sector of
+    /// one run. Entries filed before 2026-11-05 carry the vessel's RegisterTime, which never changes, so only a
+    /// vessel's first visit to each sector was kept.
+    /// </summary>
     public uint Voyage;
 
     public DateTime CollectedUtc;

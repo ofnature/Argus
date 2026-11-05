@@ -48,11 +48,14 @@ public static class PanelText
         { "Select an airship.", "飛空艇を選択してください。", "请选择飞空艇。", "請選擇飛空艇。", "Wähle ein Luftschiff.", "Choisissez un aéronef.", "비공정을 선택하십시오." };
 
     /// <summary>
-    /// The deploy entry on a submarine's menu (AutoRetainer's list). AutoRetainer never sends airships this way, so it
-    /// has no airship wording; <see cref="FindDeploy"/> also accepts any English entry that starts with "Deploy".
+    /// The deploy entry on a submarine's menu (AutoRetainer's list). AutoRetainer never sends airships this way, so the
+    /// airship wording is English only (seen in game 2026-11-05); <see cref="FindDeploy"/> also accepts the one English
+    /// entry that starts with "Deploy".
     /// </summary>
     public static readonly string[] DeploySubmarine =
         { "Deploy submersible on subaquatic voyage", "ボイジャー出港", "出发", "出發", "Auf Erkundung gehen", "Expédier le sous-marin", "탐사 출항" };
+
+    public static readonly string[] DeployAirship = { "Deploy airship on exploratory voyage" };
 
     /// <summary>Trimmed, lower case, no trailing full stop: menus and the lists above differ in exactly that.</summary>
     public static string Normalise(string text) => text.Trim().TrimEnd('.', '。').Trim().ToLowerInvariant();
@@ -73,8 +76,8 @@ public static class PanelText
     /// <summary>The deploy entry on a vessel's menu, or -1.</summary>
     public static int FindDeploy(IReadOnlyList<string> entries, VesselType type)
     {
-        var exact = Find(entries, DeploySubmarine);
-        if (exact >= 0 && type == VesselType.Submarine)
+        var exact = Find(entries, type == VesselType.Airship ? DeployAirship : DeploySubmarine);
+        if (exact >= 0)
             return exact;
 
         // English names the vessel type in its deploy entry, and no other entry on the menu starts with the word.

@@ -90,6 +90,7 @@ internal sealed class FleetStore
 
                 // A read can see the vessel but not its parts' condition; keep what an earlier read saw.
                 v.KeepConditionFrom(record.Vessels[index]);
+                v.KeepLastReturnFrom(record.Vessels[index]);
                 if (!record.Vessels[index].SameState(v))
                 {
                     record.Vessels[index] = v;
@@ -144,6 +145,7 @@ internal sealed class FleetStore
             {
                 // Same rule as a local read: a part the sender could not read keeps this client's reading.
                 remote.KeepConditionFrom(record.Vessels[index]);
+                remote.KeepLastReturnFrom(record.Vessels[index]);
                 record.Vessels[index] = remote;
                 changed = true;
             }

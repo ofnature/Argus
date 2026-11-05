@@ -91,7 +91,7 @@ internal sealed unsafe class VoyageRunner
         internal bool RepairTried;
         internal bool MapChosen;
         internal bool Applied;
-        internal uint RegisterBefore;
+        internal uint ReturnBefore;
         internal string Route = string.Empty;
 
         public bool Finished => State is TargetState.Sent or TargetState.Skipped;
@@ -374,7 +374,8 @@ internal sealed unsafe class VoyageRunner
         var vessel = Live(current);
         switch (current.State)
         {
-            case TargetState.Deploying when vessel != null && vessel.IsOut(nowUtc) && vessel.RegisterTime != current.RegisterBefore:
+            // Its return time was cleared with the report; a new one in the future means it is on its way.
+            case TargetState.Deploying when vessel != null && vessel.IsOut(nowUtc) && vessel.ReturnTime != current.ReturnBefore:
                 current.State = TargetState.Sent;
                 current.Note = current.Route;
                 Service.Log.Information("Argus: {Vessel} sent: {Route}", current.Name, current.Route);
@@ -756,7 +757,7 @@ internal sealed unsafe class VoyageRunner
         target.State = TargetState.Deploying;
         target.MapChosen = false;
         target.Applied = false;
-        target.RegisterBefore = selected.RegisterTime;
+        target.ReturnBefore = selected.ReturnTime;
         Clicked(nowUtc, $"choosing \"{entries[deploy]}\" for {target.Name}");
         menu.Entries[deploy].Select();
     }

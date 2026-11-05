@@ -35,9 +35,18 @@ public sealed class Vessel
     public ushort Bow;
     public ushort Bridge;
 
-    /// <summary>Unix seconds. RegisterTime is the dispatch time; ReturnTime is 0 when not deployed.</summary>
+    /// <summary>
+    /// Unix seconds. RegisterTime is when the vessel was registered (built) and never changes, so it is an identity,
+    /// not a voyage (seen 2026-11-05: Leviathan's is 2026-07-14). ReturnTime is 0 when not deployed.
+    /// </summary>
     public uint RegisterTime;
     public uint ReturnTime;
+
+    /// <summary>
+    /// The ReturnTime of the last voyage this client saw come home and be cleared, 0 until one has. The game clears
+    /// ReturnTime as the voyage report comes up, so this is what tells one voyage's report from the next.
+    /// </summary>
+    public uint LastReturnTime;
 
     /// <summary>Current route as exploration row ids (submarines only; airships do not expose it).</summary>
     public List<uint> Points = new();
@@ -95,6 +104,15 @@ public sealed class Vessel
             if (Condition[i] < 0 && older.Condition[i] >= 0 && PartRow(i) == older.PartRow(i))
                 Condition[i] = older.Condition[i];
         }
+    }
+
+    /// <summary>Carry the last voyage's return time over from an older read: taken from it when this read sees the voyage cleared.</summary>
+    public void KeepLastReturnFrom(Vessel older)
+    {
+        if (ReturnTime == 0 && older.ReturnTime != 0)
+            LastReturnTime = older.ReturnTime;
+        else if (LastReturnTime == 0)
+            LastReturnTime = older.LastReturnTime;
     }
 
     public DateTime ReturnUtc => DateTimeOffset.FromUnixTimeSeconds(ReturnTime).UtcDateTime;

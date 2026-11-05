@@ -51,6 +51,29 @@ public class FleetStoreTests : IDisposable
         Assert.Equal(12345u, store.GetOrCreate(Fc).Vessels[0].ReturnTime);
     }
 
+    /// <summary>
+    /// The game clears a vessel's return time as its report comes up; the store keeps the cleared one, which is how a
+    /// voyage's loot is told from the next (the RegisterTime it used before never changes).
+    /// </summary>
+    [Fact]
+    public void TheLastVoyagesReturnTimeOutlivesTheClear()
+    {
+        var store = new FleetStore(dir);
+        var now = DateTime.UtcNow;
+        store.UpdateVessels(Fc, [Make(VesselType.Submarine, 0, "Leviathan", 5000)], now);
+
+        store.UpdateVessels(Fc, [Make(VesselType.Submarine, 0, "Leviathan")], now);
+        Assert.Equal(5000u, store.GetOrCreate(Fc).Vessels[0].LastReturnTime);
+
+        // Unchanged reads and the next voyage keep it until that voyage too is cleared.
+        store.UpdateVessels(Fc, [Make(VesselType.Submarine, 0, "Leviathan")], now);
+        store.UpdateVessels(Fc, [Make(VesselType.Submarine, 0, "Leviathan", 9000)], now);
+        Assert.Equal(5000u, store.GetOrCreate(Fc).Vessels[0].LastReturnTime);
+
+        store.UpdateVessels(Fc, [Make(VesselType.Submarine, 0, "Leviathan")], now);
+        Assert.Equal(9000u, store.GetOrCreate(Fc).Vessels[0].LastReturnTime);
+    }
+
     [Fact]
     public void UnchangedVesselStillCountsAsSeen()
     {
