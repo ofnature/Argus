@@ -122,6 +122,9 @@ internal static class PlannerSection
         var scale = ImGuiHelpers.GlobalScale;
         Styling.VSpace(4f);
 
+        if (plugin.FleetSync.FollowsMaster)
+            Styling.TextWrapped($"These settings follow {plugin.Config.SettingsMaster.Trim()}'s PC over the LAN; changes made here are replaced by theirs.", Styling.TextMuted);
+
         // Goal segment
         Styling.Text("Goal", Styling.TextDim);
         ImGui.SameLine();

@@ -106,6 +106,9 @@ internal sealed unsafe class VoyageRunner
     private DateTime lastProgress;
     private string progressSignature = string.Empty;
     private string? oddReason;
+    private bool panelSeen;
+    private DateTime panelLastSeen;
+    private DateTime lastAutoCheck = DateTime.MinValue;
     private DateTime oddSince;
     private bool oddThisStep;
 
@@ -188,6 +191,46 @@ internal sealed unsafe class VoyageRunner
         Service.Log.Information("Argus: collect and resend started for {Count} vessels: {Names}",
             targets.Count, string.Join(", ", targets.Select(t => t.Name)));
         return true;
+    }
+
+    /// <summary>How long the panel has to be gone before opening it again counts as a new opening.</summary>
+    private static readonly TimeSpan PanelGone = TimeSpan.FromSeconds(3);
+
+    /// <summary>
+    /// Start a run when the panel's first menu opens with something back, once per opening: a run that stopped, or the
+    /// player walking back out to the first menu, does not start another until the panel has closed.
+    /// </summary>
+    public void AutoStart(DateTime nowUtc, bool enabled)
+    {
+        if (nowUtc - lastAutoCheck < TimeSpan.FromMilliseconds(500))
+            return;
+        lastAutoCheck = nowUtc;
+
+        if (Running)
+        {
+            panelSeen = true;
+            panelLastSeen = nowUtc;
+            return;
+        }
+
+        var screen = Screen();
+        if (screen == PanelText.Screen.Unknown)
+        {
+            if (panelSeen && nowUtc - panelLastSeen > PanelGone)
+                panelSeen = false;
+            return;
+        }
+
+        panelLastSeen = nowUtc;
+        if (panelSeen)
+            return;
+        panelSeen = true;
+
+        if (enabled && screen == PanelText.Screen.TypeSelector && Blocker(nowUtc) == null)
+        {
+            Service.Log.Information("Argus: the panel opened with vessels back; starting collect and resend");
+            Start(nowUtc);
+        }
     }
 
     /// <summary>Stopped by the player: also stops a repair or an apply that is mid-way.</summary>

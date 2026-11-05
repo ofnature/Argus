@@ -27,6 +27,13 @@ internal static class SettingsSection
             changed |= g.Toggle("Open Argus when entering a workshop", null, ref cfg.OpenOnWorkshopEnter);
         }
 
+        using (var g = SettingsGroup.Begin("Collect and resend"))
+        {
+            changed |= g.Toggle("Start when I open the Voyage Control Panel",
+                "When the panel opens with a vessel back, run collect and resend without the click: finalize each report, repair parts at 0%, and send each vessel out on the route its Argus planner picks. Once per opening; the Stop button beside the panel ends it. The same as pressing Collect and resend.",
+                ref cfg.AutoRunAtPanel);
+        }
+
         using (var g = SettingsGroup.Begin("Edge tab"))
         {
             changed |= g.Toggle("Show an Argus tab on the screen edge",
@@ -78,6 +85,35 @@ internal static class SettingsSection
                         ? "nothing received yet (is Daedalus's LAN on, here and on the other PC?)"
                         : $"{sync.Received} received, last {Formatting.Duration(now - sync.LastReceivedUtc)} ago";
                     g.Note($"{sent} · {heard}");
+                }
+
+                g.Row("Planner settings from", "The character whose vessel settings (gil farmer, progression, levelling, map, time cap) every PC follows. Put the same name on every PC: the PC logged in as that character sends them, every other PC takes them in place of its own. Leave empty to keep settings on each PC.", 260f, () =>
+                {
+                    var master = cfg.SettingsMaster;
+                    ImGui.SetNextItemWidth(170f * Dalamud.Interface.Utility.ImGuiHelpers.GlobalScale);
+                    if (ImGui.InputTextWithHint("##settings_master", "character name", ref master, 32))
+                    {
+                        cfg.SettingsMaster = master;
+                        cfg.Save();
+                    }
+
+                    ImGui.SameLine();
+                    if (ImGui.SmallButton("Me") && Service.ObjectTable.LocalPlayer is { } me)
+                    {
+                        cfg.SettingsMaster = me.Name.TextValue;
+                        cfg.Save();
+                    }
+
+                    Styling.Tooltip("Use the character logged in here.");
+                });
+
+                if (!string.IsNullOrWhiteSpace(cfg.SettingsMaster))
+                {
+                    g.Note(sync.IsSettingsMaster
+                        ? "This PC is the master: its vessel settings go to every PC that follows it."
+                        : sync.PrefsReceived == 0
+                            ? $"Following {cfg.SettingsMaster.Trim()}: nothing received yet (is that PC on, sharing, and logged in as them?)."
+                            : $"Following {cfg.SettingsMaster.Trim()}: {sync.PrefsReceived} received, last {Formatting.Duration(now - sync.LastPrefsReceivedUtc)} ago. Changes made here are replaced by theirs.");
                 }
             }
         }

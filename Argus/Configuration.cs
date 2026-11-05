@@ -72,6 +72,13 @@ public sealed class Configuration : IPluginConfiguration
     public bool ShareFleetOverLan;
 
     /// <summary>
+    /// The character whose planner settings every PC follows, set the same on every PC (like Charon's fleet leader).
+    /// The PC logged in as this character sends each vessel's settings over the LAN; every other PC with sharing on
+    /// takes them in place of its own. Empty: settings stay on each PC.
+    /// </summary>
+    public string SettingsMaster = string.Empty;
+
+    /// <summary>
     /// Pin an "Argus" tab to a screen edge, like Daedalus, Charon and Ariadne: pointing at it pops the fleet out
     /// beside it. Off until asked for; the ordinary window still opens with /argus.
     /// </summary>
@@ -88,6 +95,12 @@ public sealed class Configuration : IPluginConfiguration
     /// only ever fires from the player pressing Apply.
     /// </summary>
     public bool DeployAfterApply;
+
+    /// <summary>
+    /// Start collect and resend by itself when the Voyage Control Panel opens with a vessel back, once per opening.
+    /// Off by default: the button beside the panel does the same on a click.
+    /// </summary>
+    public bool AutoRunAtPanel;
 
     // Main window
     public bool OpenOnWorkshopEnter = false;

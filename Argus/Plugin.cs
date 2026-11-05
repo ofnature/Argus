@@ -128,6 +128,7 @@ public sealed class Plugin : IDalamudPlugin
         PartsInterop.Update(now);
         RepairInterop.Update(now);
         Runner.Update(now);
+        Runner.AutoStart(now, Config.AutoRunAtPanel);
         FleetSync.Update(now);
         edgeDock.IsOpen = Config.EdgeDockEnabled && edgeDock.AnyTab();
         dtr.Update(now);
