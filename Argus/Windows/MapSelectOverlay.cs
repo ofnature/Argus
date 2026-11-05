@@ -40,6 +40,8 @@ public sealed class MapSelectOverlay : Window, IDisposable
     public override void PreOpenCheck()
     {
         IsOpen = false;
+        if (plugin.Runner.Running)
+            return;
         var rect = MapSelectInterop.Rect();
         var fcId = plugin.Fleet.CurrentFreeCompanyId;
         if (rect == null || fcId == 0 || !plugin.Fleet.Store.TryGet(fcId, out var fc))

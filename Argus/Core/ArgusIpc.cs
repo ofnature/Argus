@@ -53,7 +53,7 @@ internal sealed class ArgusIpc : IDisposable
         lastError = pi.GetIpcProvider<string>("Argus.LastError");
 
         apiVersion.RegisterFunc(() => ApiVersion);
-        isBusy.RegisterFunc(() => plugin.PlannerInterop.Applying || plugin.PartsInterop.Running || plugin.RepairInterop.Running);
+        isBusy.RegisterFunc(() => plugin.PlannerInterop.Applying || plugin.PartsInterop.Running || plugin.RepairInterop.Running || plugin.Runner.Running);
         getFleet.RegisterFunc(GetFleet);
         suggestRoute.RegisterFunc(SuggestRoute);
         applyRoute.RegisterFunc(ApplyRoute);
@@ -278,6 +278,13 @@ internal sealed class ArgusIpc : IDisposable
         if (vessel == null)
             return false;
 
+        // Collect and resend drives the planner itself; a second driver would fight it.
+        if (plugin.Runner.Running)
+        {
+            plugin.PlannerInterop.Refuse("Collect and resend is running.");
+            return false;
+        }
+
         // Same guard as the overlay: a deploy the game will refuse is not attempted, and the caller is told why.
         if (request.Deploy && plugin.Planner.DeployRefusal(vessel, DateTime.UtcNow) is { } refusal)
         {
@@ -375,7 +382,7 @@ internal sealed class ArgusIpc : IDisposable
     private bool ApplyBuild(string json)
     {
         var request = Parse<ApplyBuildDto>(json);
-        if (request?.Parts == null || request.Parts.Length != 4)
+        if (request?.Parts == null || request.Parts.Length != 4 || plugin.Runner.Running)
             return false;
 
         var vessel = Resolve(request);

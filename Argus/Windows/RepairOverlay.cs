@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Numerics;
 using Argus.Core.Game;
@@ -40,6 +40,8 @@ public sealed class RepairOverlay : Window, IDisposable
     public override void PreOpenCheck()
     {
         IsOpen = false;
+        if (plugin.Runner.Running)
+            return;
         var now = DateTime.UtcNow;
         var repair = plugin.RepairInterop;
 

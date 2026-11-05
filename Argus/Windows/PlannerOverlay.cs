@@ -39,7 +39,7 @@ public sealed class PlannerOverlay : Window, IDisposable
     public override void PreOpenCheck()
     {
         IsOpen = false;
-        if (!plugin.Config.ShowPlannerOverlay)
+        if (!plugin.Config.ShowPlannerOverlay || plugin.Runner.Running)
             return;
 
         var interop = plugin.PlannerInterop;
@@ -67,7 +67,7 @@ public sealed class PlannerOverlay : Window, IDisposable
             plugin.Planner.Select(vessel);
             plugin.Planner.SetMap(map);
             if (type == VesselType.Airship)
-                LearnAirshipUnlocks(fc);
+                LearnAirshipUnlocks(plugin, fc);
         }
 
         var (x, y, _, _) = rect.Value;
@@ -76,8 +76,8 @@ public sealed class PlannerOverlay : Window, IDisposable
         IsOpen = true;
     }
 
-    /// <summary>The planner only lists discovered sectors, so every listed row is an unlocked one.</summary>
-    private void LearnAirshipUnlocks(FreeCompanyRecord fc)
+    /// <summary>The planner only lists discovered sectors, so every listed row is an unlocked one. Also used by collect and resend.</summary>
+    internal static void LearnAirshipUnlocks(Plugin plugin, FreeCompanyRecord fc)
     {
         var rows = plugin.PlannerInterop.ReadDestinations();
         if (rows.Count == 0)

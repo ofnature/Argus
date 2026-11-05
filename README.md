@@ -14,7 +14,8 @@ Argus is a [Dalamud](https://github.com/goatcorp/Dalamud) plugin for FINAL FANTA
 - **Server info bar** — `Argus: Subs 2/4 · Air 1/2` (returned / total). Turns amber when something is waiting for you. Click to open.
 - **EXP calculator** — per-sector EXP with the surveillance / retrieval / favor bonus model, rank-up simulation and voyages-to-rank.
 - **Route planner** — best route by EXP per hour or EXP per voyage under a duration cap. Always respects rank, range, ceruleum on hand, unlocked sectors and surveillance requirements. Add **must-include** sectors; **progression** mode automatically includes the next sector that unlocks a sector, map or extra vessel slot, and the planner shows what each sector unlocks.
-- **One-click route entry** — with the in-game voyage planner open, an Argus overlay fills in the suggested sectors. You review and press Deploy; Argus never dispatches on its own.
+- **One-click route entry** — with the in-game voyage planner open, an Argus overlay fills in the suggested sectors. You review and press Deploy, or tick "Deploy after applying" to have Apply send it.
+- **Collect and resend** — at the Voyage Control Panel, one button takes every vessel that is back: finalizes its report (the loot), repairs parts at 0%, and sends it out on the route its own Argus planner picks now, so progression vessels move on and farmers keep farming. It only runs when you press it, and stops at anything it does not recognise.
 - **Loot history** — items per sector and build, with CSV export.
 - **Supplies warnings** — ceruleum tanks and repair kits versus the next dispatch, voyages until repair.
 - **Part optimizer** — best part set for a target route or rank within airframe capacity, for submarines and airships.

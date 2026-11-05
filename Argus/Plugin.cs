@@ -31,6 +31,7 @@ public sealed class Plugin : IDalamudPlugin
     internal PlannerInterop PlannerInterop { get; }
     internal PartsInterop PartsInterop { get; }
     internal RepairInterop RepairInterop { get; }
+    internal VoyageRunner Runner { get; }
     internal FleetSync FleetSync { get; }
     internal PartLocator PartLocator { get; }
     internal CharonFetch CharonFetch { get; }
@@ -43,6 +44,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly DockLayoutShare dockLayout;
     private readonly EdgeDockWindow edgeDock;
     private readonly RepairOverlay repairOverlay;
+    private readonly VoyageRunOverlay runOverlay;
     private readonly DtrStatus dtr;
     private readonly LootHook lootHook;
     private readonly ArgusIpc ipc;
@@ -64,6 +66,7 @@ public sealed class Plugin : IDalamudPlugin
         PlannerInterop = new PlannerInterop();
         PartsInterop = new PartsInterop();
         RepairInterop = new RepairInterop();
+        Runner = new VoyageRunner(this);
         FleetSync = new FleetSync(pluginInterface, Fleet, Config);
         PartLocator = new PartLocator(pluginInterface);
         CharonFetch = new CharonFetch(pluginInterface);
@@ -75,10 +78,12 @@ public sealed class Plugin : IDalamudPlugin
         plannerOverlay = new PlannerOverlay(this);
         repairOverlay = new RepairOverlay(this);
         mapSelectOverlay = new MapSelectOverlay(this);
+        runOverlay = new VoyageRunOverlay(this);
         windowSystem.AddWindow(MainWindow);
         windowSystem.AddWindow(plannerOverlay);
         windowSystem.AddWindow(repairOverlay);
         windowSystem.AddWindow(mapSelectOverlay);
+        windowSystem.AddWindow(runOverlay);
 
         // The edge tab: the fleet at a glance behind a tab on a screen edge, at its own edge and spot (dragging
         // stores new ones). The layout is shared with every other plugin's dock so none cover each other; tabs
@@ -122,6 +127,7 @@ public sealed class Plugin : IDalamudPlugin
         PlannerInterop.Update(now);
         PartsInterop.Update(now);
         RepairInterop.Update(now);
+        Runner.Update(now);
         FleetSync.Update(now);
         edgeDock.IsOpen = Config.EdgeDockEnabled && edgeDock.AnyTab();
         dtr.Update(now);
@@ -177,6 +183,7 @@ public sealed class Plugin : IDalamudPlugin
         plannerOverlay.Dispose();
         repairOverlay.Dispose();
         mapSelectOverlay.Dispose();
+        runOverlay.Dispose();
         dockLayout.Dispose();
         Planner.Dispose();
 
